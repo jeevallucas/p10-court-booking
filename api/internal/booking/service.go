@@ -321,7 +321,7 @@ func (s *Service) CreateWalkIn(ctx context.Context, req WalkIn) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	reference, err := newReference()
+	reference, err := NewReference()
 	if err != nil {
 		return View{}, err
 	}

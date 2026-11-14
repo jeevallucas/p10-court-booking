@@ -176,3 +176,18 @@ revisit it.
   signature check, and rules as a real one.
 - Consequences: the page is reached through the web app's proxy like the API. It is mounted
   only for the fake provider; a real provider's checkout would replace the payment link.
+
+## 2026-11-14 Seed a synthetic schedule that resets as a whole
+
+- Context: the demo needs a believable day on the board and free slots for visitors to book, and
+  must not drift into an empty or vandalised state.
+- Options: (a) a fixed SQL dump; (b) a seed program that rebuilds two weeks around the current
+  time from invented occupancy rates (busy evenings and weekend mornings, quiet weekday middays),
+  inside one transaction.
+- Decision: (b). Past hours get finished bookings, some no-shows and desk walk-ins; upcoming
+  hours get paid bookings. The random seed is the date, so a given day's schedule can be
+  reproduced. Names are invented and phone numbers use the +62 800 range, which no mobile
+  operator assigns to people.
+- Consequences: reseeding truncates bookings, payment notifications, and outbox messages; the
+  venue, courts, prices, and owner account are kept.
+- Revisit if: the demo needs to keep visitor bookings across nights.

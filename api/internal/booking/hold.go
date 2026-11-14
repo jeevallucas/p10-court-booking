@@ -42,7 +42,7 @@ func PlaceHold(ctx context.Context, pool *pgxpool.Pool, req HoldRequest) (store.
 	if !req.End.After(req.Start) {
 		return store.Booking{}, ErrInvalidPeriod
 	}
-	reference, err := newReference()
+	reference, err := NewReference()
 	if err != nil {
 		return store.Booking{}, err
 	}
@@ -101,9 +101,9 @@ func isOverlapViolation(err error) bool {
 // phone is not mistaken for another.
 const referenceAlphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
-// newReference returns an 8-character booking code: 40 random bits, so a collision among a
+// NewReference returns an 8-character booking code: 40 random bits, so a collision among a
 // venue's bookings is negligible, and the unique constraint still catches one.
-func newReference() (string, error) {
+func NewReference() (string, error) {
 	random := make([]byte, 8)
 	if _, err := rand.Read(random); err != nil {
 		return "", fmt.Errorf("generate booking reference: %w", err)

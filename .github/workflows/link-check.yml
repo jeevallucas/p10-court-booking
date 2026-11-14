@@ -1,0 +1,20 @@
+name: Link check
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: lycheeverse/lychee-action@v2
+        with:
+          # localhost links in the run instructions only work on a reviewer's machine.
+          args: --no-progress --exclude localhost README.md docs
+          fail: true

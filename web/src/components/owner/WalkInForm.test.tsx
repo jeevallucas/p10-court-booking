@@ -37,6 +37,23 @@ describe("WalkInForm", () => {
     expect(saveButton().disabled).toBe(true);
   });
 
+  it("opened from the toolbar, starts on a court that is free", () => {
+    renderWithQueries(
+      <WalkInForm
+        courts={[badmintonOne, badmintonTwo]}
+        bookings={[ownerBooking({ start: "2026-11-20T10:00:00+07:00" })]}
+        day="2026-11-20"
+        now={now}
+        onCreated={() => {}}
+        onSessionEnded={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    expect((screen.getByLabelText("Lapangan") as HTMLSelectElement).value).toBe("c2");
+    expect(saveButton().disabled).toBe(false);
+  });
+
   it("asks for a name and accepts a walk-in without a phone number", () => {
     openForm(20);
     fireEvent.click(saveButton());

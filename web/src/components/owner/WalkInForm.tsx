@@ -41,9 +41,23 @@ export function WalkInForm({
   onSessionEnded,
   onClose,
 }: Props) {
-  const [courtId, setCourtId] = useState(initialCourtId ?? courts[0]?.id ?? "");
   const [row, setRow] = useState(initialRow ?? firstOpenRow(day, now));
   const [rows, setRows] = useState(2);
+  // Opened from the toolbar, start on the first court that is free for the next hour.
+  const [courtId, setCourtId] = useState(
+    () =>
+      initialCourtId ??
+      courts.find(
+        (court) =>
+          !placementProblem(
+            bookings,
+            { courtId: court.id, start: rowStart(day, row), end: rowStart(day, row + rows) },
+            now,
+          ),
+      )?.id ??
+      courts[0]?.id ??
+      "",
+  );
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [touched, setTouched] = useState(false);

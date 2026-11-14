@@ -99,3 +99,42 @@ revisit it.
 - Consequences: the demo's "pay deposit" step opens the fake provider's page instead of the Snap
   pop-up, and the README says so. No real or sandbox money flows anywhere.
 - Revisit if: a working Midtrans sandbox account becomes available.
+
+## 2026-11-14 Generate the Go server from openapi.yaml with oapi-codegen
+
+- Context: the contract is the source of truth for both sides; hand-written handlers drift.
+- Options: (a) hand-written handlers plus a contract test; (b) oapi-codegen's strict server for
+  `net/http`, plus its request-validation middleware (kin-openapi) that rejects requests the
+  spec does not allow.
+- Decision: (b). Handlers implement a generated interface, so a response the spec does not
+  declare does not compile, and malformed requests never reach the booking rules. Both are
+  widely used Go libraries; oapi-codegen is pinned as a `go tool` in go.mod.
+- Consequences: which operations need an owner session is read from the spec's `security`
+  blocks at start-up. This was added after a test showed the first version's hard-coded list used
+  the wrong operation names and protected nothing; `TestEveryOwnerEndpointNeedsASession` now
+  calls every owner endpoint without a cookie.
+- Revisit if: the spec needs OpenAPI 3.1 features oapi-codegen does not support.
+
+## 2026-11-14 Keep the owner's session cookie first-party behind the web app's proxy
+
+- Context: the web app (Vercel) and the API (Render) are on different sites. A cookie set by
+  the API would be third-party to the web app, which browsers increasingly block.
+- Options: (a) `SameSite=None` cookies across sites plus CORS; (b) bearer tokens in browser
+  storage; (c) the web app proxies `/v1` to the API, so the cookie belongs to the web app's site.
+- Decision: (c). The cookie is `HttpOnly`, `Secure`, and `SameSite=Lax`, which also blocks
+  cross-site form posts, and no token is readable by page scripts.
+- Consequences: every API call from the browser makes one extra hop through Vercel.
+- Revisit if: the API needs to serve other clients that cannot use cookies.
+
+## 2026-11-14 Rate-limit holds and logins in memory, keyed by client address
+
+- Context: hold creation and owner login need protection from scripted abuse; one API instance
+  runs the demo.
+- Options: (a) a shared store such as Redis; (b) an in-memory token bucket per client address
+  (`golang.org/x/time/rate`).
+- Decision: (b): 10 holds and 5 logins per minute per address, with small bursts. The client
+  address is the `X-Forwarded-For` entry added by the last trusted proxy (`TRUSTED_PROXY_HOPS`),
+  so a client cannot pick its own address by sending that header.
+- Consequences: limits reset when the API restarts, and several instances would each allow
+  the full rate.
+- Revisit if: the API runs on more than one instance.

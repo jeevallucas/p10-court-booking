@@ -87,7 +87,11 @@ paths:
       summary: End the owner session
       security: [{ownerSession: []}]
       responses:
-        '204': {description: Logged out.}
+        '204':
+          description: Logged out; the cookie is cleared.
+          headers:
+            Set-Cookie:
+              schema: {type: string}
 
   /v1/owner/bookings:
     get:

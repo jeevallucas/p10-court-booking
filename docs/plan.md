@@ -12,8 +12,8 @@ Each milestone ends with a commit and a push. Done means the listed check passes
 - Done when: the concurrency test passes in CI.
 
 ## 2. Booking API, owner auth, contract
-- `openapi.yaml` as the source of truth; Go handlers checked against it; TypeScript client
-  generated from it.
+- `openapi.yaml` as the source of truth; Go handlers generated from it and requests validated
+  against it. (The TypeScript client is generated in milestone 4, with the web app.)
 - Availability by date and sport; hold (expires after 10 minutes); confirm; cancel; no-show;
   walk-in; reschedule.
 - Owner login with Argon2id password hashes and server-side sessions; players book as guests with

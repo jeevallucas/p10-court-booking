@@ -42,7 +42,7 @@ jobs:
         run: |
           go tool oapi-codegen -config oapi-codegen.yaml ../openapi.yaml
           git diff --exit-code internal/httpapi/openapi.gen.go
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           working-directory: api
       - name: Test with the race detector

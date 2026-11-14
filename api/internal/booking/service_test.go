@@ -3,6 +3,7 @@ package booking_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -312,5 +313,105 @@ func TestAHoldWhoseTimeIsOverReadsAsExpiredBeforeTheSweep(t *testing.T) {
 	if view.Status != store.BookingStatusExpired || view.HoldExpiresAt.Valid {
 		t.Fatalf("got status %s with hold_expires_at valid=%v, want expired and no expiry time",
 			view.Status, view.HoldExpiresAt.Valid)
+	}
+}
+
+func TestPlayersCanHoldUpToFourteenDaysAhead(t *testing.T) {
+	service, venue := newService(t, local(10, 0))
+	ctx := context.Background()
+	lastDay := local(19, 0).AddDate(0, 0, booking.BookingHorizonDays-1)
+	if _, err := service.HoldForPlayer(ctx, playerHold(venue.Badminton[0], lastDay, 1)); err != nil {
+		t.Fatalf("the 14th day: %v", err)
+	}
+	beyond := local(19, 0).AddDate(0, 0, booking.BookingHorizonDays)
+	if _, err := service.HoldForPlayer(ctx, playerHold(venue.Badminton[0], beyond, 1)); !errors.Is(err, booking.ErrTooFarAhead) {
+		t.Fatalf("the 15th day: got %v, want ErrTooFarAhead", err)
+	}
+}
+
+func TestOnePhoneHoldsAtMostTwoSlotsAtOnce(t *testing.T) {
+	service, venue := newService(t, local(10, 0))
+	ctx := context.Background()
+	for i := range 2 {
+		if _, err := service.HoldForPlayer(ctx, playerHold(venue.Badminton[i], local(19, 0), 1)); err != nil {
+			t.Fatalf("hold %d: %v", i+1, err)
+		}
+	}
+	if _, err := service.HoldForPlayer(ctx, playerHold(venue.Badminton[2], local(19, 0), 1)); !errors.Is(err, booking.ErrTooManyHolds) {
+		t.Fatalf("third hold: got %v, want ErrTooManyHolds", err)
+	}
+	other := playerHold(venue.Badminton[2], local(19, 0), 1)
+	other.CustomerPhone = "081398765432"
+	if _, err := service.HoldForPlayer(ctx, other); err != nil {
+		t.Fatalf("another player's hold: %v", err)
+	}
+}
+
+func TestAMoveOntoAHoldWhoseTimeIsOverGoesThrough(t *testing.T) {
+	service, venue := newService(t, local(10, 0))
+	ctx := context.Background()
+	walkIn := mustWalkIn(t, service, venue.Badminton[0], local(19, 0), local(20, 0))
+	held, err := service.HoldForPlayer(ctx, playerHold(venue.Badminton[1], local(19, 0), 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Pool.Exec(ctx,
+		"update booking set hold_expires_at = now() - interval '1 second' where id = $1", held.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Reschedule(ctx, walkIn.ID, venue.Badminton[1], local(19, 0), local(20, 0)); err != nil {
+		t.Fatalf("the board shows the lapsed hold as free, so the move must succeed: %v", err)
+	}
+}
+
+func TestARescheduleAlsoWaitsForTheCourtItLeaves(t *testing.T) {
+	service, venue := newService(t, local(10, 0))
+	walkIn := mustWalkIn(t, service, venue.Badminton[0], local(19, 0), local(20, 0))
+	// Without the old court's lock, two owners swapping bookings between two courts deadlock.
+	dbtest.RequireQueuesBehindCourtLock(t, service.Pool, venue.Badminton[0], func() error {
+		_, err := service.Reschedule(context.Background(), walkIn.ID, venue.Badminton[1],
+			local(19, 0), local(20, 0))
+		return err
+	})
+}
+
+func TestTheOwnersChangesAreSentToThePlayer(t *testing.T) {
+	service, venue := newService(t, local(10, 0))
+	service.OwnerAlertEmail = "pemilik@arenakotabaru.test"
+	ctx := context.Background()
+	held, err := service.HoldForPlayer(ctx, playerHold(venue.Badminton[0], local(19, 0), 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ChangeStatus(ctx, held.ID, store.BookingStatusConfirmed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Reschedule(ctx, held.ID, venue.Badminton[1], local(20, 0), local(21, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ChangeStatus(ctx, held.ID, store.BookingStatusCancelled); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := service.Pool.Query(ctx, "select recipient, subject from outbox_message order by id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for rows.Next() {
+		var recipient, subject string
+		if err := rows.Scan(&recipient, &subject); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, recipient+" | "+strings.TrimSuffix(strings.TrimSuffix(subject, held.Reference), " "))
+	}
+	want := []string{
+		"whatsapp:+6281234567890 | Booking terkonfirmasi",
+		"whatsapp:+6281234567890 | Booking dipindah",
+		"whatsapp:+6281234567890 | Booking dibatalkan",
+		"pemilik@arenakotabaru.test | DP perlu dikembalikan:",
+	}
+	if strings.Join(got, "; ") != strings.Join(want, "; ") {
+		t.Fatalf("messages: %q, want %q", got, want)
 	}
 }

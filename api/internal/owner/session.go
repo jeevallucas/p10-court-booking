@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -38,8 +39,8 @@ type Sessions struct {
 }
 
 // A real hash to verify against when the email is unknown, so a login for a missing account
-// takes as long as one for a real account.
-var unknownAccountHash = mustHash("not a real password")
+// takes as long as one for a real account. It is made on first use, not at every cold start.
+var unknownAccountHash = sync.OnceValue(func() string { return mustHash("not a real password") })
 
 func mustHash(password string) string {
 	hash, err := HashPassword(password)
@@ -54,7 +55,7 @@ func (s *Sessions) LogIn(ctx context.Context, email, password string) (string, e
 	q := store.New(s.Pool)
 	account, err := q.GetOwnerByEmail(ctx, email)
 	if errors.Is(err, pgx.ErrNoRows) {
-		_, _ = verifyPassword(unknownAccountHash, password)
+		_, _ = verifyPassword(unknownAccountHash(), password)
 		return "", ErrInvalidCredentials
 	}
 	if err != nil {

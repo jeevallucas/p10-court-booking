@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jeevallucas/p10-court-booking/api/internal/booking"
+	"github.com/jeevallucas/p10-court-booking/api/internal/notify"
 	"github.com/jeevallucas/p10-court-booking/api/internal/payment"
 	"github.com/jeevallucas/p10-court-booking/api/internal/store"
 )
@@ -46,6 +47,11 @@ func Handler(cfg Config) http.Handler {
 			http.Error(w, "Halaman pembayaran gagal dimuat. Muat ulang halaman.", http.StatusInternalServerError)
 			return
 		}
+		// Only a held booking waits for its deposit; any other status is shown on the status page.
+		if view.Status != store.BookingStatusHeld {
+			http.Redirect(w, r, cfg.ReturnURL+view.Reference, http.StatusSeeOther)
+			return
+		}
 		render(w, view)
 	})
 	mux.HandleFunc("POST /fakepay/{reference}", func(w http.ResponseWriter, r *http.Request) {
@@ -55,11 +61,17 @@ func Handler(cfg Config) http.Handler {
 			http.Error(w, "Booking tidak ditemukan.", http.StatusNotFound)
 			return
 		}
+		// Paying or cancelling twice, or after the hold ended, would only send notifications the
+		// API has to turn down; send the player to the booking's status instead.
+		if view.Status != store.BookingStatusHeld {
+			http.Redirect(w, r, cfg.ReturnURL+reference, http.StatusSeeOther)
+			return
+		}
 		status := "settlement"
 		if r.FormValue("action") == "cancel" {
 			status = "cancel"
 		}
-		if err := notify(r.Context(), cfg, view, status); err != nil {
+		if err := sendNotification(r.Context(), cfg, view, status); err != nil {
 			cfg.Logger.Error("fake payment notification", "reference", reference, "error", err)
 			http.Error(w, "Notifikasi pembayaran gagal terkirim ke server booking. Coba lagi.",
 				http.StatusBadGateway)
@@ -86,7 +98,7 @@ type notification struct {
 	Currency          string `json:"currency"`
 }
 
-func notify(ctx context.Context, cfg Config, view booking.View, status string) error {
+func sendNotification(ctx context.Context, cfg Config, view booking.View, status string) error {
 	statusCode := "200"
 	if status != "settlement" {
 		statusCode = "202"
@@ -180,7 +192,7 @@ func render(w http.ResponseWriter, view booking.View) {
 	_ = page.Execute(w, map[string]any{
 		"Reference": view.Reference,
 		"CourtName": view.CourtName,
-		"Deposit":   payment.Rupiah(view.DepositIdr),
+		"Deposit":   notify.Rupiah(view.DepositIdr),
 		"Payable":   view.Status == store.BookingStatusHeld,
 		"Status":    view.Status,
 	})

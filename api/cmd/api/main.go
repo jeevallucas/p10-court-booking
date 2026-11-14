@@ -79,7 +79,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		return fmt.Errorf("close migration connection: %w", err)
 	}
 
-	bookings := &booking.Service{Pool: pool, Now: time.Now}
+	bookings := &booking.Service{Pool: pool, Now: time.Now, OwnerAlertEmail: ownerEmail}
 	sessions := &owner.Sessions{Pool: pool, Lifetime: 12 * time.Hour}
 	api, err := httpapi.NewHandler(httpapi.Config{
 		Bookings:         bookings,

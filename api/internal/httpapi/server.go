@@ -51,6 +51,10 @@ func problemFor(err error) (ProblemJSONResponse, bool) {
 		return problem(InvalidRequest, err.Error()), true
 	case errors.Is(err, booking.ErrNotFound):
 		return problem(NotFound, err.Error()), true
+	case errors.Is(err, booking.ErrTooManyHolds):
+		return problem(TooManyHolds, err.Error()), true
+	case errors.Is(err, booking.ErrTooFarAhead):
+		return problem(TooFarAhead, err.Error()), true
 	}
 	return ProblemJSONResponse{}, false
 }
@@ -96,7 +100,7 @@ func (s *server) PlaceHold(ctx context.Context, req PlaceHoldRequestObject) (Pla
 	switch {
 	case !ok:
 		return nil, err
-	case p.Code == SlotTaken:
+	case p.Code == SlotTaken, p.Code == TooManyHolds:
 		return PlaceHold409JSONResponse{p}, nil
 	default:
 		return PlaceHold422JSONResponse(p), nil

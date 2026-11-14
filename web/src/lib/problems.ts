@@ -13,6 +13,10 @@ const messages: Record<Problem["code"], string> = {
   in_the_past: "Jam itu sudah lewat. Pilih jam yang belum dimulai.",
   invalid_signature: "Notifikasi pembayaran tidak sah.",
   amount_mismatch: "Jumlah pembayaran tidak sesuai DP.",
+  too_many_holds:
+    "Nomor ini sudah menahan dua slot yang belum dibayar. Bayar atau tunggu salah satunya lepas.",
+  too_far_ahead: "Booking hanya bisa untuk hari ini sampai 13 hari ke depan.",
+  internal_error: "Server booking sedang bermasalah. Coba lagi sebentar lagi.",
 };
 
 export const unreachableMessage =

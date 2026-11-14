@@ -73,7 +73,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 			ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 				loggerFrom(r.Context(), cfg.Logger).Error("request failed", "error", err)
 				writeProblem(w, http.StatusInternalServerError,
-					problem(InvalidRequest, "the server could not complete the request; try again"))
+					problem(InternalError, "the server could not complete the request; try again"))
 			},
 		})
 

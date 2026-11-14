@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/jeevallucas/p10-court-booking/api/internal/booking"
+	"github.com/jeevallucas/p10-court-booking/api/internal/notify"
 	"github.com/jeevallucas/p10-court-booking/api/internal/store"
 )
 
@@ -78,6 +79,11 @@ var errReplay = errors.New("notification already recorded")
 func (p *Processor) Apply(ctx context.Context, n Notification, payload []byte) (Outcome, error) {
 	want := Signature(n.OrderID, n.StatusCode, n.GrossAmount, p.ServerKey)
 	if subtle.ConstantTimeCompare([]byte(want), []byte(strings.ToLower(n.SignatureKey))) != 1 {
+		return "", ErrInvalidSignature
+	}
+	// The signature covers status_code but not transaction_status. Midtrans sends 200 with every
+	// payment, so a "settlement" with another code is a signed failure that someone relabelled.
+	if paid(n) && n.StatusCode != "200" {
 		return "", ErrInvalidSignature
 	}
 	amount, err := parseRupiah(n.GrossAmount)
@@ -147,11 +153,11 @@ func (p *Processor) decide(ctx context.Context, tx pgx.Tx, n Notification, view 
 				return "", err
 			}
 			if !confirmed {
-				return RefundNeeded, enqueue(ctx, q, refundAlert(p.OwnerEmail, view))
+				return RefundNeeded, notify.Queue(ctx, q, notify.RefundAlert(p.OwnerEmail, view.Notice()))
 			}
-			return Confirmed, enqueue(ctx, q, confirmationMessage(view))
+			return Confirmed, notify.Queue(ctx, q, notify.Confirmation(view.Notice()))
 		default: // cancelled by the owner, a no-show, or a walk-in: the deposit has no slot
-			return RefundNeeded, enqueue(ctx, q, refundAlert(p.OwnerEmail, view))
+			return RefundNeeded, notify.Queue(ctx, q, notify.RefundAlert(p.OwnerEmail, view.Notice()))
 		}
 	case failed(n):
 		if view.Status != store.BookingStatusHeld {
@@ -205,9 +211,11 @@ func paid(n Notification) bool {
 	return false
 }
 
+// failed reports a payment that is over. A "deny" is not: the player can try another card or
+// method while the hold lasts, so it leaves the hold in place.
 func failed(n Notification) bool {
 	switch n.TransactionStatus {
-	case "deny", "cancel", "expire", "failure":
+	case "cancel", "expire", "failure":
 		return true
 	}
 	return false
@@ -224,13 +232,4 @@ func parseRupiah(amount string) (int32, error) {
 		return 0, fmt.Errorf("amount %q is not a whole number of Rupiah", amount)
 	}
 	return int32(value), nil
-}
-
-func enqueue(ctx context.Context, q *store.Queries, m message) error {
-	if err := q.EnqueueMessage(ctx, store.EnqueueMessageParams{
-		Recipient: m.recipient, Subject: m.subject, Body: m.body,
-	}); err != nil {
-		return fmt.Errorf("queue message: %w", err)
-	}
-	return nil
 }

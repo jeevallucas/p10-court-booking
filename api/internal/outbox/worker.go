@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/smtp"
 	"strings"
 	"time"
@@ -103,15 +104,61 @@ type SMTPSender struct {
 }
 
 // Send delivers the message as a plain-text email.
-func (s SMTPSender) Send(_ context.Context, m Message) error {
+func (s SMTPSender) Send(ctx context.Context, m Message) error {
 	to := m.Recipient
 	if phone, ok := strings.CutPrefix(to, "whatsapp:"); ok {
 		to = strings.TrimPrefix(phone, "+") + "@whatsapp.test"
 	}
 	body := "From: " + s.From + "\r\nTo: " + to + "\r\nSubject: " + m.Subject +
 		"\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n" + m.Body + "\r\n"
-	if err := smtp.SendMail(s.Addr, nil, s.From, []string{to}, []byte(body)); err != nil {
+	if err := s.deliver(ctx, to, []byte(body)); err != nil {
 		return fmt.Errorf("send mail to %s via %s: %w", to, s.Addr, err)
 	}
 	return nil
+}
+
+// sendTimeout bounds one delivery. smtp.SendMail has none, and the worker sends inside the
+// transaction that claimed the message, so a hung mail server would pin a connection.
+const sendTimeout = 10 * time.Second
+
+func (s SMTPSender) deliver(ctx context.Context, to string, body []byte) error {
+	ctx, cancel := context.WithTimeout(ctx, sendTimeout)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", s.Addr)
+	if err != nil {
+		return err
+	}
+	deadline, _ := ctx.Deadline()
+	if err := conn.SetDeadline(deadline); err != nil {
+		_ = conn.Close()
+		return err
+	}
+	host, _, err := net.SplitHostPort(s.Addr)
+	if err != nil {
+		_ = conn.Close()
+		return err
+	}
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		_ = conn.Close()
+		return err
+	}
+	defer func() { _ = client.Close() }()
+	if err := client.Mail(s.From); err != nil {
+		return err
+	}
+	if err := client.Rcpt(to); err != nil {
+		return err
+	}
+	writer, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := writer.Write(body); err != nil {
+		return err
+	}
+	if err := writer.Close(); err != nil {
+		return err
+	}
+	return client.Quit()
 }

@@ -101,3 +101,8 @@ update booking
 set court_id = sqlc.arg(court_id), period = sqlc.arg(period)::tstzrange, updated_at = now()
 where id = sqlc.arg(id) and status in ('confirmed', 'walk_in')
 returning *;
+
+-- name: CountLiveHoldsForPhone :one
+-- Holds that still block a court, for the per-phone limit; the database clock decides.
+select count(*) from booking
+where customer_phone = sqlc.arg(customer_phone) and status = 'held' and hold_expires_at > now();

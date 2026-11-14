@@ -134,3 +134,23 @@ func TestCancellingThePaymentReleasesTheSlot(t *testing.T) {
 	}
 	holdAt(t, bookings, venue, 19) // the slot is free again
 }
+
+func TestABookingThatIsNoLongerHeldCannotBePaidAgain(t *testing.T) {
+	server, bookings, venue := newProvider(t)
+	held := holdAt(t, bookings, venue, 19)
+	submit(t, server, held.Reference, "pay")
+
+	resp := submit(t, server, held.Reference, "pay")
+	if resp.StatusCode != http.StatusSeeOther ||
+		resp.Header.Get("Location") != "http://web.test/booking/"+held.Reference {
+		t.Fatalf("status %d, location %q", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	var notifications int
+	if err := bookings.Pool.QueryRow(context.Background(),
+		"select count(*) from payment_notification").Scan(&notifications); err != nil {
+		t.Fatal(err)
+	}
+	if notifications != 1 {
+		t.Fatalf("%d notifications recorded, want 1: a second payment must not be sent", notifications)
+	}
+}

@@ -1,6 +1,7 @@
 package booking
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/jeevallucas/p10-court-booking/api/internal/notify"
 	"github.com/jeevallucas/p10-court-booking/api/internal/store"
 )
 
@@ -22,6 +24,20 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrInvalidTransition means the booking's current status does not allow the change.
 	ErrInvalidTransition = errors.New("the booking's status does not allow this change")
+	// ErrTooFarAhead means a player asked for a day beyond the booking horizon.
+	ErrTooFarAhead = errors.New("players can book up to 14 days ahead")
+	// ErrTooManyHolds means the phone number already has the most holds running at once.
+	ErrTooManyHolds = errors.New("this phone number already has two holds running")
+)
+
+const (
+	// BookingHorizonDays is how far ahead players can book: today and the next 13 days, the
+	// days the web app's date strip shows.
+	BookingHorizonDays = 14
+	// maxLiveHoldsPerPhone stops one visitor from holding most of an evening while paying for
+	// none of it. Two lets a group book two courts. The count and the insert are not one
+	// statement, so two simultaneous requests can pass it; the rate limit bounds the rest.
+	maxLiveHoldsPerPhone = 2
 )
 
 // Service applies the booking rules for one venue. Now is the clock for "has it started yet"
@@ -29,6 +45,9 @@ var (
 type Service struct {
 	Pool *pgxpool.Pool
 	Now  func() time.Time
+	// OwnerAlertEmail receives refund alerts when the owner cancels a booking with a paid
+	// deposit; empty sends none.
+	OwnerAlertEmail string
 }
 
 // View is a booking with its court, as the API shows it.
@@ -36,6 +55,21 @@ type View struct {
 	store.Booking
 	CourtName string
 	Sport     string
+}
+
+// Notice is what a message to the player or the owner says about this booking.
+func (v View) Notice() notify.Booking {
+	return notify.Booking{
+		Reference:     v.Reference,
+		CourtName:     v.CourtName,
+		CustomerName:  v.CustomerName,
+		CustomerPhone: v.CustomerPhone,
+		Start:         v.Period.Lower.Time,
+		End:           v.Period.Upper.Time,
+		PriceIDR:      v.PriceIdr,
+		DepositIDR:    v.DepositIdr,
+		Status:        string(v.Status),
+	}
 }
 
 // Court is one court of the venue.
@@ -230,6 +264,19 @@ func (s *Service) HoldForPlayer(ctx context.Context, req PlayerHold) (View, erro
 	if !req.Start.After(s.Now()) {
 		return View{}, ErrInThePast
 	}
+	today := s.Now().In(v.location)
+	horizon := time.Date(today.Year(), today.Month(), today.Day()+BookingHorizonDays, 0, 0, 0, 0,
+		v.location)
+	if !req.Start.Before(horizon) {
+		return View{}, ErrTooFarAhead
+	}
+	live, err := store.New(s.Pool).CountLiveHoldsForPhone(ctx, phone)
+	if err != nil {
+		return View{}, fmt.Errorf("count holds for phone: %w", err)
+	}
+	if live >= maxLiveHoldsPerPhone {
+		return View{}, ErrTooManyHolds
+	}
 	price, err := Price(v.rules, court.Sport, req.Start.In(v.location), end.In(v.location))
 	if err != nil {
 		return View{}, err
@@ -390,17 +437,34 @@ func (s *Service) Reschedule(ctx context.Context, id, courtID pgtype.UUID, start
 	if !end.After(s.Now()) {
 		return View{}, ErrInThePast
 	}
+	before := View{Booking: current.Booking, CourtName: current.CourtName, Sport: current.Sport}
 	var moved store.Booking
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		txq := store.New(tx)
-		if err := txq.LockCourt(ctx, court.ID); err != nil {
-			return fmt.Errorf("lock court: %w", err)
+		// Both courts, in one order: the booking's old row is still checked on its old court
+		// until the move commits, so two owners swapping bookings between two courts would
+		// otherwise each wait for the other.
+		for _, lock := range inLockOrder(current.Booking.CourtID, court.ID) {
+			if err := txq.LockCourt(ctx, lock); err != nil {
+				return fmt.Errorf("lock court: %w", err)
+			}
+		}
+		// The board shows a lapsed hold as free, so the move must not be refused because of it.
+		if _, err := txq.ExpireOverlappingHolds(ctx, store.ExpireOverlappingHoldsParams{
+			CourtID: court.ID, Period: Period(start, end),
+		}); err != nil {
+			return fmt.Errorf("expire stale holds: %w", err)
 		}
 		var rescheduleErr error
 		moved, rescheduleErr = txq.Reschedule(ctx, store.RescheduleParams{
 			ID: id, CourtID: court.ID, Period: Period(start, end),
 		})
-		return rescheduleErr
+		if rescheduleErr != nil {
+			return rescheduleErr
+		}
+		after := View{Booking: moved, CourtName: court.Name, Sport: court.Sport}
+		return notify.Queue(ctx, txq, notify.Moved(after.Notice(), before.CourtName,
+			before.Period.Lower.Time, before.Period.Upper.Time))
 	})
 	if isOverlapViolation(err) {
 		return View{}, ErrSlotTaken
@@ -460,7 +524,24 @@ func (s *Service) ChangeStatus(ctx context.Context, id pgtype.UUID, to store.Boo
 		changed, changeErr = txq.ChangeStatus(ctx, store.ChangeStatusParams{
 			ID: id, ToStatus: to, AllowedFrom: fromText,
 		})
-		return changeErr
+		if changeErr != nil {
+			return changeErr
+		}
+		notice := View{Booking: changed, CourtName: current.CourtName, Sport: current.Sport}.Notice()
+		switch to {
+		case store.BookingStatusConfirmed:
+			return notify.Queue(ctx, txq, notify.Confirmation(notice))
+		case store.BookingStatusCancelled:
+			depositPaid := current.Booking.Status == store.BookingStatusConfirmed &&
+				current.Booking.DepositIdr > 0
+			if err := notify.Queue(ctx, txq, notify.Cancelled(notice, depositPaid)); err != nil {
+				return err
+			}
+			if depositPaid {
+				return notify.Queue(ctx, txq, notify.RefundAlert(s.OwnerAlertEmail, notice))
+			}
+		}
+		return nil
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return View{}, fmt.Errorf("%w: a %s booking cannot become %s", ErrInvalidTransition,
@@ -479,4 +560,15 @@ func (s *Service) ExpireHolds(ctx context.Context) (int64, error) {
 		return 0, fmt.Errorf("expire holds: %w", err)
 	}
 	return expired, nil
+}
+
+// inLockOrder returns the courts to lock, each once, in one fixed order for every writer.
+func inLockOrder(a, b pgtype.UUID) []pgtype.UUID {
+	switch bytes.Compare(a.Bytes[:], b.Bytes[:]) {
+	case 0:
+		return []pgtype.UUID{a}
+	case -1:
+		return []pgtype.UUID{a, b}
+	}
+	return []pgtype.UUID{b, a}
 }

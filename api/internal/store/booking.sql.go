@@ -46,6 +46,19 @@ func (q *Queries) ChangeStatus(ctx context.Context, arg ChangeStatusParams) (Boo
 	return i, err
 }
 
+const countLiveHoldsForPhone = `-- name: CountLiveHoldsForPhone :one
+select count(*) from booking
+where customer_phone = $1 and status = 'held' and hold_expires_at > now()
+`
+
+// Holds that still block a court, for the per-phone limit; the database clock decides.
+func (q *Queries) CountLiveHoldsForPhone(ctx context.Context, customerPhone string) (int64, error) {
+	row := q.db.QueryRow(ctx, countLiveHoldsForPhone, customerPhone)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const expireHolds = `-- name: ExpireHolds :execrows
 update booking
 set status = 'expired', hold_expires_at = null, updated_at = now()

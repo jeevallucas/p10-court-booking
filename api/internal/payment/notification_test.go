@@ -268,3 +268,34 @@ func TestAPaymentQueuesBehindAnotherWriterOnTheSameCourt(t *testing.T) {
 		return err
 	})
 }
+
+func TestADeclinedCardKeepsTheHoldSoThePlayerCanPayAgain(t *testing.T) {
+	f := newFixture(t)
+	held := f.hold(t, 0, 19)
+
+	if got := f.apply(t, signed(held.Reference, "trx-1", "deny", held.DepositIdr)); got != payment.Ignored {
+		t.Fatalf("deny: outcome %s, want ignored", got)
+	}
+	if got := f.status(t, held.Reference); got != store.BookingStatusHeld {
+		t.Fatalf("after a declined card the booking is %s, want still held", got)
+	}
+	if got := f.apply(t, signed(held.Reference, "trx-2", "settlement", held.DepositIdr)); got != payment.Confirmed {
+		t.Fatalf("the second attempt: outcome %s, want confirmed", got)
+	}
+}
+
+func TestASettlementMustCarryStatusCode200(t *testing.T) {
+	f := newFixture(t)
+	held := f.hold(t, 0, 19)
+	// A genuinely signed failure, with its unsigned status relabelled as a payment.
+	forged := signed(held.Reference, "trx-1", "deny", held.DepositIdr)
+	forged.TransactionStatus = "settlement"
+	payload, _ := json.Marshal(forged)
+
+	if _, err := f.processor.Apply(context.Background(), forged, payload); !errors.Is(err, payment.ErrInvalidSignature) {
+		t.Fatalf("got %v, want ErrInvalidSignature", err)
+	}
+	if got := f.status(t, held.Reference); got != store.BookingStatusHeld {
+		t.Fatalf("booking is %s, want still held", got)
+	}
+}

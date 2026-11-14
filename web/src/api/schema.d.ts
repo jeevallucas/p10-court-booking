@@ -176,7 +176,7 @@ export interface components {
              * @description Stable machine-readable reason; the web app shows its own message.
              * @enum {string}
              */
-            code: "slot_taken" | "invalid_request" | "not_found" | "rate_limited" | "unauthorized" | "invalid_transition" | "outside_opening_hours" | "in_the_past" | "invalid_signature" | "amount_mismatch";
+            code: "slot_taken" | "invalid_request" | "not_found" | "rate_limited" | "unauthorized" | "invalid_transition" | "outside_opening_hours" | "in_the_past" | "invalid_signature" | "amount_mismatch" | "too_many_holds" | "too_far_ahead" | "internal_error";
             detail: string;
         };
         Court: {

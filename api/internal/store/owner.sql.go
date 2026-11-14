@@ -73,16 +73,17 @@ func (q *Queries) GetSessionOwner(ctx context.Context, tokenHash []byte) (GetSes
 
 const insertSession = `-- name: InsertSession :exec
 insert into owner_session (token_hash, owner_id, expires_at)
-values ($1, $2, $3)
+values ($1, $2, now() + $3::interval)
 `
 
 type InsertSessionParams struct {
 	TokenHash []byte
 	OwnerID   pgtype.UUID
-	ExpiresAt pgtype.Timestamptz
+	Lifetime  pgtype.Interval
 }
 
+// Expiry uses the database clock, the same clock GetSessionOwner compares against.
 func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) error {
-	_, err := q.db.Exec(ctx, insertSession, arg.TokenHash, arg.OwnerID, arg.ExpiresAt)
+	_, err := q.db.Exec(ctx, insertSession, arg.TokenHash, arg.OwnerID, arg.Lifetime)
 	return err
 }

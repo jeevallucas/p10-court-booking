@@ -4,8 +4,9 @@ from owner_account
 where email = lower(sqlc.arg(email));
 
 -- name: InsertSession :exec
+-- Expiry uses the database clock, the same clock GetSessionOwner compares against.
 insert into owner_session (token_hash, owner_id, expires_at)
-values (sqlc.arg(token_hash), sqlc.arg(owner_id), sqlc.arg(expires_at));
+values (sqlc.arg(token_hash), sqlc.arg(owner_id), now() + sqlc.arg(lifetime)::interval);
 
 -- name: GetSessionOwner :one
 select owner_account.id, owner_account.venue_id, owner_account.display_name

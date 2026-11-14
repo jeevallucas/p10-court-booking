@@ -1,12 +1,14 @@
-# Design review: player flow
+# Design review
+
+Both reviews use `web/scripts/capture-screens.mjs` against the production build (`next start`),
+the local API and the seeded database.
+
+# Player flow
 
 Screens: today's schedule, another day's schedule, booking sheet (empty and with errors), all
 courts full, schedule failed to load, loading, booking status (held, confirmed, expired) and
-booking not found. Each at 375, 768 and 1440 px, captured with `web/scripts/capture-screens.mjs`
-against the production build (`next start`), the local API and the seeded database. axe ran on
-the schedule, the booking sheet and the held status page at every width.
-
-The owner board gets its own review in milestone 5.
+booking not found. Each at 375, 768 and 1440 px. axe ran on the schedule, the booking sheet and
+the held status page at every width.
 
 ## Round 1 (2026-11-14)
 
@@ -58,3 +60,54 @@ and the return to the status page, which showed the booking confirmed.
 
 Final screenshots for the README are in `docs/screenshots/player-*.png`. The demo recording is
 made in milestone 7, once the owner board exists, so one recording shows both sides.
+
+### Later change: rendering per request (milestone 5)
+
+The schedule page was prerendered at build time, which would have shown the build day after a
+deploy (see docs/decisions.md). Rendered per request, Lighthouse on `/` now reads 97 / 100 / 100
+/ 100 with LCP 2.5 s (was 0.9 s when static) and a 12 ms server response; CLS stays 0.
+
+# Owner board
+
+Screens: login, today's board, keyboard focus on the board, the panel for a held booking, the
+walk-in form after saving without a name, a drag into a conflict and the refused drop (1366 and
+1440 px only; touch screens move bookings from the panel), a day without bookings, the board
+failing to load, and loading. Each at 375, 768, 1440 and 1366 px, the laptop size the design
+brief plans for. axe ran on the login, the board, the panel and the walk-in form at every width.
+
+## Round 1 (2026-11-14)
+
+| Check | Result | Evidence and fix |
+| --- | --- | --- |
+| axe | Pass | 0 violations across 25 page and width combinations, player screens included. |
+| Walk-in form | Fail | Opened from "Tambah walk-in", it started on Lapangan 1 at the running half hour, which was booked, so the form opened on a conflict with its button disabled. It now starts on the first court free for the next hour, with a test. |
+| Held booking panel | Fail | It said "Bayar di kasir Rp60.000" (the full price) but, after "Tandai sudah bayar di kasir", the same booking showed "Sisa di kasir Rp30.000". The button records the deposit paid at the desk, so it now says "Tandai DP dibayar di kasir" and the remaining amount is the same before and after. |
+| 375 px | Fail | The "›" button wrapped onto its own line under the date. The arrows and the date now stay on one line, with the date set slightly smaller on phones. |
+| 1366 and 1440 px | Fail | The footer kept the player pages' 72rem column while the board is 100rem wide, so their left edges did not line up. The footer now follows the wider page when the board is shown. |
+| Drag into a conflict | Pass | The landing spot turns red with "Bentrok dengan Bayu Pratama, 13.00–14.00."; on release the booking stays put and the message stays above the board. |
+| States | Pass | Each block names its state (Terkonfirmasi, Menunggu DP with stripes, Walk-in, Tidak datang struck through); empty day, load failure with retry, and loading all read correctly. |
+| Anti-slop list | Pass | Flat square blocks, colour only for state, no shadows or icons, sentence case. |
+
+The first captures also exposed a hold left behind by each script run (three "Menunggu DP"
+blocks in a row); the database was reseeded before round 2.
+
+## Round 2
+
+axe: 0 violations across 25 combinations. The four round 1 failures are fixed in the captures:
+one-line day navigation at 375 px, the walk-in form opening on a free court, consistent amounts
+for a held booking, and the footer aligned with the board.
+
+Lighthouse 13.6.0, default mobile emulation with throttling; the board measured with a session
+cookie from the demo login:
+
+| Page | Performance | Accessibility | Best practices | SEO | LCP | CLS |
+| --- | --- | --- | --- | --- | --- | --- |
+| Owner login (`/owner/login`) | 100 | 100 | 100 | 100 | 0.9 s | 0 |
+| Owner board (`/owner`) | 98 | 100 | 100 | 100 | 0.9 s | 0.02 |
+
+Checked by hand in the browser: logging in with the demo account, dragging a booking to another
+court, a refused drag onto another booking, adding a walk-in from an empty slot, and cancelling
+it after the confirmation step.
+
+Final screenshots: `docs/screenshots/owner-*.png`.
+

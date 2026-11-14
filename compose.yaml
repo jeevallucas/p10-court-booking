@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: court
+      POSTGRES_PASSWORD: court
+      POSTGRES_DB: court_booking
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U court -d court_booking"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+volumes:
+  db-data:

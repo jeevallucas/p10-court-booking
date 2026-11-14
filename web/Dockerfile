@@ -1,5 +1,5 @@
 # The web app as a standalone Next.js server, for docker compose. The demo runs on Vercel.
-FROM node:22.23.2-alpine AS build
+FROM node:26.13.0-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -9,7 +9,7 @@ ARG API_URL=http://api:8080
 ENV API_URL=$API_URL NEXT_TELEMETRY_DISABLED=1 BUILD_STANDALONE=1
 RUN npm run build
 
-FROM node:22.23.2-alpine
+FROM node:26.13.0-alpine
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 COPY --from=build /app/.next/standalone ./

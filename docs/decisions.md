@@ -287,3 +287,30 @@ revisit it.
   `docker compose up --build` runs the same images locally for reviewers who prefer that.
 - Revisit if: the demo needs to answer instantly; a paid instance removes the sleep.
 
+## 2026-11-14 Run the demo API on Vercel instead of Render
+
+- Context: Render asked for a credit card before creating any service on this account, even a
+  free one (dashboard, Blueprint, and API all answered 402), and the demo must not depend on a
+  card. This replaces the API part of the hosting decision above.
+- Options: (a) another free container host (the card-free ones found run only in the US or EU,
+  or now need a card or a subscription); (b) Vercel, which now runs a standard `net/http` server
+  from `cmd/api/main.go` as one function, reading the Go version from `go.mod`.
+- Decision: (b), as a second Vercel project with `api/` as its root, in `sin1` like the web app
+  and Neon. The server code is unchanged.
+- What was checked on the live demo: a hold, the fake payment, and the signed notification the
+  payment page sends to the API on 127.0.0.1 confirm the booking; the outbox sent its message;
+  the owner's cookie arrives `HttpOnly; Secure; SameSite=Lax` through the web app's proxy.
+- Proxy hops: Vercel's Go runtime reaches the server through a local bridge, so
+  `X-Forwarded-For` arrives as `<visitor>, 127.0.0.1`; Vercel replaces any value the visitor
+  sends. `TRUSTED_PROXY_HOPS=2` therefore gives each visitor their own rate-limit bucket. With 0
+  or 1, every visitor showed as 127.0.0.1 and would have shared one.
+- Consequences: no one-minute wake-up (a cold start took about 0.5 s), so the wake-up note was
+  removed. The worker and the expiry sweep run only while an instance is active. Bookings stay
+  correct: every write, the availability list and the owner board treat a hold past its time as
+  free. A player's status page shows "expired" at the next sweep, within 30 seconds, because
+  its polling keeps the instance active. Rate limits
+  are per instance. Deploys run `vercel deploy` from a copy of the folder without git history:
+  the Hobby plan blocks deployments whose commit author (a GitHub noreply address) it cannot
+  match to the account. `api/Dockerfile` and `compose.yaml` still run the long-lived server.
+- Revisit if: the demo needs the worker to run on a schedule even with no visitors.
+

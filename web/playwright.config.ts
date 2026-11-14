@@ -3,7 +3,6 @@ import { defineConfig, devices } from "@playwright/test";
 // End-to-end tests drive the built web app against the real API and a seeded PostgreSQL.
 // Locally: start the database, seed it, build the web app, then `npm run e2e` (README); servers
 // already running on ports 8080 and 3000 are reused. CI starts both from scratch.
-const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
 
 export default defineConfig({
   testDir: "./e2e",
@@ -29,7 +28,7 @@ export default defineConfig({
     {
       command: "go run ./cmd/api",
       cwd: "../api",
-      url: `http://localhost:8080/v1/availability?date=${today}&sport=badminton`,
+      url: "http://localhost:8080/healthz",
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
       env: {

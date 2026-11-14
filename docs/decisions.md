@@ -45,3 +45,41 @@ revisit it.
   conventions. The README explains the screens in English.
 - Consequences: end-to-end tests select elements by their Indonesian accessible names.
 - Revisit if: the demo needs an English audience more than a realistic one.
+
+## 2026-11-14 Prevent double booking with an exclusion constraint, not application locks
+
+- Context: two players may try to hold the same court and time at the same moment, and the owner
+  may create a walk-in while a player pays.
+- Options: (a) `SELECT ... FOR UPDATE` on existing rows, then insert; (b) an advisory lock per
+  court; (c) a PostgreSQL exclusion constraint on (court, time range) using `btree_gist`, with
+  the application translating the violation into "slot taken".
+- Decision: (c). Option (a) cannot lock rows that do not exist yet, so two inserts into an empty
+  slot both succeed unless the isolation level is raised; (b) works only for writers that remember
+  to take the lock. The constraint holds for every writer, including the seed program and manual
+  SQL, and costs one GiST index.
+- Consequences: the constraint cannot read the clock, so a hold whose ten minutes are over still
+  counts until its row is marked expired. Placing a hold therefore expires stale holds on that
+  court and period in the same transaction; a periodic sweep will expire the rest. The test
+  `TestTwoHundredConcurrentHoldsForOneSlotLeaveExactlyOne` checks the guarantee with 200
+  goroutines.
+- Revisit if: bookings ever span venues or need partial-court sharing, which a single range per
+  court cannot express.
+
+## 2026-11-14 Test against a real PostgreSQL database per test
+
+- Context: the guarantee lives in a constraint, so a mocked store cannot test it.
+- Options: (a) testcontainers; (b) a `DATABASE_URL` pointing at a running PostgreSQL (docker
+  compose locally, a service container in CI), with each test creating and dropping its own
+  database.
+- Decision: (b). It adds no dependency, runs the same way locally and in CI, and a fresh database
+  per test keeps tests independent; each costs about 0.4 s.
+- Consequences: tests fail with a message naming the fix when `DATABASE_URL` is unset.
+- Revisit if: the suite grows past a minute.
+
+## 2026-11-14 Generate typed queries with sqlc run from its Docker image
+
+- Context: sqlc's PostgreSQL parser needs cgo, which this Windows machine does not have.
+- Options: (a) hand-written pgx queries; (b) sqlc installed with `go install`; (c) sqlc from its
+  official Docker image, version pinned.
+- Decision: (c). The generated code is committed, and CI runs `sqlc diff` with the same image to
+  catch generated code that is out of date.

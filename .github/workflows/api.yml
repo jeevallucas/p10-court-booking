@@ -1,0 +1,45 @@
+name: API
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: court
+          POSTGRES_PASSWORD: court
+          POSTGRES_DB: court_booking
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U court -d court_booking"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    defaults:
+      run:
+        working-directory: api
+    env:
+      DATABASE_URL: postgres://court:court@localhost:5432/court_booking?sslmode=disable
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - name: Check generated queries are up to date
+        run: docker run --rm -v "$PWD:/src" -w /src sqlc/sqlc:1.31.1 diff
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          working-directory: api
+      - name: Test with the race detector
+        run: go test -race -count=1 ./...

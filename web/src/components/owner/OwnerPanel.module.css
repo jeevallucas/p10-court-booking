@@ -1,0 +1,185 @@
+.panel h2 {
+  font-size: var(--text-section);
+  font-weight: 700;
+}
+
+.panel h3 {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-body);
+  font-weight: 700;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.close {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* The same words and colours as the blocks on the board. */
+.state {
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  font-size: var(--text-small);
+  font-weight: 700;
+}
+
+.state[data-status="confirmed"] {
+  background: var(--court-green);
+  color: var(--paper);
+}
+
+.state[data-status="walk_in"] {
+  background: var(--walk-in);
+  color: var(--paper);
+}
+
+.state[data-status="held"] {
+  background: repeating-linear-gradient(135deg, var(--amber-fill) 0 8px, #f9d684 8px 16px);
+  border-color: var(--amber-ink);
+}
+
+.state[data-status="no_show"] {
+  background: var(--no-show);
+  border-color: var(--ink-muted);
+}
+
+.when {
+  margin: var(--space-1) 0 var(--space-4);
+}
+
+.when :global(.time) {
+  font-size: var(--text-section);
+}
+
+.details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3) var(--space-2);
+  margin: 0;
+}
+
+.details dt {
+  color: var(--ink-muted);
+  font-size: var(--text-small);
+}
+
+.details dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.section {
+  margin: var(--space-4) 0 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+.section p {
+  margin: 0 0 var(--space-3);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.field {
+  display: flex;
+  flex: 1 1 7rem;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.field select,
+.field input {
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--ink-muted);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 400;
+}
+
+.field input[aria-invalid="true"] {
+  border: 2px solid var(--conflict);
+}
+
+.error,
+.problem {
+  color: var(--conflict);
+}
+
+.error {
+  font-weight: 400;
+}
+
+.problem {
+  margin: 0 0 var(--space-3);
+}
+
+.hint {
+  margin: 0 0 var(--space-3);
+  color: var(--ink-muted);
+}
+
+.primary,
+.secondary,
+.danger {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary {
+  border: 0;
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.secondary {
+  border: 1px solid var(--ink);
+  background: var(--paper);
+}
+
+.danger {
+  margin-bottom: var(--space-2);
+  border: 0;
+  background: var(--conflict);
+  color: var(--paper);
+}
+
+.primary:disabled,
+.secondary:disabled,
+.danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.confirm p {
+  font-weight: 600;
+}

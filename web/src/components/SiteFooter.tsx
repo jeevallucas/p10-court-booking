@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import styles from "./SiteFooter.module.css";
 
 const author = "Putu Jeevallucas Jnanamaitriya Surya Gautama";
@@ -23,6 +25,10 @@ export function SiteFooter() {
     <footer className={styles.footer}>
       <div className={styles.inner}>
         <div>
+          <nav aria-label="Halaman demo" className={styles.pages}>
+            <Link href="/">Pesan lapangan</Link>
+            <Link href="/owner">Papan pengelola</Link>
+          </nav>
           <p>© 2026 {author}. Demo portofolio; kode berlisensi MIT.</p>
           <p>
             Arena Kotabaru adalah venue fiktif. Pembayaran memakai penyedia tiruan; tidak ada uang

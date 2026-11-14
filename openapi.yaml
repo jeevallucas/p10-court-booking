@@ -1,0 +1,335 @@
+openapi: 3.0.3
+info:
+  title: Arena Kotabaru court booking API
+  version: 1.0.0
+  description: |
+    Players see free slots, hold one, and pay a deposit. The owner runs the day: walk-ins,
+    no-shows, cancellations, and moving bookings. Times are RFC 3339 with an offset; the venue
+    is in Asia/Jakarta (WIB). Amounts are whole Rupiah.
+servers:
+  - url: /
+
+paths:
+  /v1/availability:
+    get:
+      operationId: getAvailability
+      summary: Free and taken slots for one sport on one day
+      parameters:
+        - name: date
+          in: query
+          required: true
+          description: The day in the venue's time zone.
+          schema: {type: string, format: date}
+        - name: sport
+          in: query
+          required: true
+          schema: {$ref: '#/components/schemas/Sport'}
+      responses:
+        '200':
+          description: One entry per court and hour from opening to closing.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Availability'}
+        '422': {$ref: '#/components/responses/Problem'}
+
+  /v1/holds:
+    post:
+      operationId: placeHold
+      summary: Hold a court for 10 minutes while the player pays the deposit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/HoldRequest'}
+      responses:
+        '201':
+          description: The slot is held until holdExpiresAt.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Booking'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '429': {$ref: '#/components/responses/Problem'}
+
+  /v1/bookings/{reference}:
+    get:
+      operationId: getBooking
+      summary: A booking's current state, for the player's confirmation screen
+      parameters:
+        - $ref: '#/components/parameters/Reference'
+      responses:
+        '200':
+          description: The booking, without the customer's phone number.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Booking'}
+        '404': {$ref: '#/components/responses/Problem'}
+
+  /v1/owner/session:
+    post:
+      operationId: logIn
+      summary: Start an owner session; the token is set as an HttpOnly cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+      responses:
+        '204':
+          description: Logged in.
+          headers:
+            Set-Cookie:
+              schema: {type: string}
+        '401': {$ref: '#/components/responses/Problem'}
+        '429': {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: logOut
+      summary: End the owner session
+      security: [{ownerSession: []}]
+      responses:
+        '204': {description: Logged out.}
+
+  /v1/owner/bookings:
+    get:
+      operationId: listOwnerBookings
+      summary: Every booking that occupies a court on one day, for the schedule board
+      security: [{ownerSession: []}]
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema: {type: string, format: date}
+      responses:
+        '200':
+          description: The day's courts and bookings.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OwnerDay'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+
+  /v1/owner/walk-ins:
+    post:
+      operationId: createWalkIn
+      summary: Book a court for a customer at the desk
+      security: [{ownerSession: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WalkInRequest'}
+      responses:
+        '201':
+          description: The walk-in booking.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OwnerBooking'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+
+  /v1/owner/bookings/{id}:
+    patch:
+      operationId: rescheduleBooking
+      summary: Move a booking to another court or time
+      security: [{ownerSession: []}]
+      parameters:
+        - $ref: '#/components/parameters/BookingID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RescheduleRequest'}
+      responses:
+        '200':
+          description: The moved booking.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OwnerBooking'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+
+  /v1/owner/bookings/{id}/status:
+    post:
+      operationId: changeBookingStatus
+      summary: Confirm payment at the desk, cancel, or mark a no-show
+      security: [{ownerSession: []}]
+      parameters:
+        - $ref: '#/components/parameters/BookingID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/StatusChange'}
+      responses:
+        '200':
+          description: The booking after the change.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OwnerBooking'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+
+components:
+  securitySchemes:
+    ownerSession:
+      type: apiKey
+      in: cookie
+      name: court_session
+
+  parameters:
+    Reference:
+      name: reference
+      in: path
+      required: true
+      schema: {type: string, pattern: '^[0-9A-HJKMNP-TV-Z]{8}$'}
+    BookingID:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+
+  responses:
+    Problem:
+      description: The request could not be done; code says why.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Problem'}
+
+  schemas:
+    Sport:
+      type: string
+      enum: [badminton, futsal]
+
+    BookingStatus:
+      type: string
+      enum: [held, confirmed, walk_in, cancelled, expired, no_show]
+
+    Problem:
+      type: object
+      required: [code, detail]
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable reason; the web app shows its own message.
+          enum: [slot_taken, invalid_request, not_found, rate_limited, unauthorized,
+            invalid_transition, outside_opening_hours, in_the_past]
+        detail:
+          type: string
+
+    Court:
+      type: object
+      required: [id, name, sport]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        sport: {$ref: '#/components/schemas/Sport'}
+
+    Slot:
+      type: object
+      required: [courtId, start, end, priceIdr, available]
+      properties:
+        courtId: {type: string, format: uuid}
+        start: {type: string, format: date-time}
+        end: {type: string, format: date-time}
+        priceIdr: {type: integer}
+        available: {type: boolean}
+
+    Availability:
+      type: object
+      required: [date, sport, courts, slots]
+      properties:
+        date: {type: string, format: date}
+        sport: {$ref: '#/components/schemas/Sport'}
+        courts:
+          type: array
+          items: {$ref: '#/components/schemas/Court'}
+        slots:
+          type: array
+          items: {$ref: '#/components/schemas/Slot'}
+
+    HoldRequest:
+      type: object
+      required: [courtId, start, hours, customerName, customerPhone]
+      properties:
+        courtId: {type: string, format: uuid}
+        start: {type: string, format: date-time}
+        hours: {type: integer, minimum: 1, maximum: 2}
+        customerName: {type: string, minLength: 2, maxLength: 60}
+        customerPhone:
+          type: string
+          description: Indonesian mobile number, as typed (0812..., 62812..., or +62812...).
+          pattern: '^(\+62|62|0)8[0-9]{8,11}$'
+
+    Booking:
+      type: object
+      required: [reference, courtName, sport, start, end, status, priceIdr, depositIdr]
+      properties:
+        reference: {type: string}
+        courtName: {type: string}
+        sport: {$ref: '#/components/schemas/Sport'}
+        start: {type: string, format: date-time}
+        end: {type: string, format: date-time}
+        status: {$ref: '#/components/schemas/BookingStatus'}
+        priceIdr: {type: integer}
+        depositIdr: {type: integer}
+        holdExpiresAt: {type: string, format: date-time, nullable: true}
+
+    OwnerBooking:
+      allOf:
+        - $ref: '#/components/schemas/Booking'
+        - type: object
+          required: [id, courtId, customerName, customerPhone]
+          properties:
+            id: {type: string, format: uuid}
+            courtId: {type: string, format: uuid}
+            customerName: {type: string}
+            customerPhone: {type: string}
+
+    OwnerDay:
+      type: object
+      required: [date, courts, bookings]
+      properties:
+        date: {type: string, format: date}
+        courts:
+          type: array
+          items: {$ref: '#/components/schemas/Court'}
+        bookings:
+          type: array
+          items: {$ref: '#/components/schemas/OwnerBooking'}
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: {type: string, format: email}
+        password: {type: string, minLength: 1}
+
+    WalkInRequest:
+      type: object
+      required: [courtId, start, end, customerName]
+      properties:
+        courtId: {type: string, format: uuid}
+        start: {type: string, format: date-time}
+        end: {type: string, format: date-time}
+        customerName: {type: string, minLength: 2, maxLength: 60}
+        customerPhone: {type: string, pattern: '^(\+62|62|0)8[0-9]{8,11}$'}
+
+    RescheduleRequest:
+      type: object
+      required: [courtId, start, end]
+      properties:
+        courtId: {type: string, format: uuid}
+        start: {type: string, format: date-time}
+        end: {type: string, format: date-time}
+
+    StatusChange:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [confirmed, cancelled, no_show]

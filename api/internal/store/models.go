@@ -93,8 +93,34 @@ type Court struct {
 	SortOrder int32
 }
 
+type OwnerAccount struct {
+	ID           pgtype.UUID
+	VenueID      pgtype.UUID
+	Email        string
+	PasswordHash string
+	DisplayName  string
+}
+
+type OwnerSession struct {
+	TokenHash []byte
+	OwnerID   pgtype.UUID
+	ExpiresAt pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
+}
+
+type PriceRule struct {
+	ID             pgtype.UUID
+	VenueID        pgtype.UUID
+	Sport          string
+	StartsAt       pgtype.Time
+	EndsAt         pgtype.Time
+	HourlyPriceIdr int32
+}
+
 type Venue struct {
 	ID       pgtype.UUID
 	Name     string
 	Timezone string
+	OpensAt  pgtype.Time
+	ClosesAt pgtype.Time
 }

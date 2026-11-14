@@ -99,3 +99,48 @@ func closeOrLog(t testing.TB, what string, closeFn func() error) {
 		t.Logf("close %s: %v", what, err)
 	}
 }
+
+// Venue is the fixture most tests use: one venue open 07.00 to 23.00 with four badminton and
+// two futsal courts, and day (to 17.00) and evening prices.
+type Venue struct {
+	ID        pgtype.UUID
+	Badminton []pgtype.UUID
+	Futsal    []pgtype.UUID
+}
+
+// NewVenue inserts the fixture venue, its courts, and its price list.
+func NewVenue(t testing.TB, pool *pgxpool.Pool) Venue {
+	t.Helper()
+	ctx := context.Background()
+	var v Venue
+	if err := pool.QueryRow(ctx,
+		"insert into venue (name) values ('Arena Test') returning id").Scan(&v.ID); err != nil {
+		t.Fatalf("insert venue: %v", err)
+	}
+	courts := []struct {
+		name, sport string
+	}{
+		{"Lapangan 1", "badminton"}, {"Lapangan 2", "badminton"}, {"Lapangan 3", "badminton"},
+		{"Lapangan 4", "badminton"}, {"Futsal A", "futsal"}, {"Futsal B", "futsal"},
+	}
+	for i, c := range courts {
+		var id pgtype.UUID
+		if err := pool.QueryRow(ctx, `insert into court (venue_id, name, sport, sort_order)
+			values ($1, $2, $3, $4) returning id`, v.ID, c.name, c.sport, i+1).Scan(&id); err != nil {
+			t.Fatalf("insert court: %v", err)
+		}
+		if c.sport == "badminton" {
+			v.Badminton = append(v.Badminton, id)
+		} else {
+			v.Futsal = append(v.Futsal, id)
+		}
+	}
+	if _, err := pool.Exec(ctx, `insert into price_rule
+		(venue_id, sport, starts_at, ends_at, hourly_price_idr) values
+		($1, 'badminton', '07:00', '17:00', 60000), ($1, 'badminton', '17:00', '23:00', 80000),
+		($1, 'futsal', '07:00', '17:00', 150000), ($1, 'futsal', '17:00', '23:00', 200000)`,
+		v.ID); err != nil {
+		t.Fatalf("insert price rules: %v", err)
+	}
+	return v
+}

@@ -11,6 +11,56 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const changeStatus = `-- name: ChangeStatus :one
+update booking
+set status = $1, hold_expires_at = null, updated_at = now()
+where id = $2 and status::text = any($3::text[])
+returning id, reference, court_id, period, status, customer_name, customer_phone, price_idr, deposit_idr, hold_expires_at, created_at, updated_at
+`
+
+type ChangeStatusParams struct {
+	ToStatus    BookingStatus
+	ID          pgtype.UUID
+	AllowedFrom []string
+}
+
+// Applies a status change only from an allowed current status; no row means it was not allowed
+// (or the booking does not exist).
+func (q *Queries) ChangeStatus(ctx context.Context, arg ChangeStatusParams) (Booking, error) {
+	row := q.db.QueryRow(ctx, changeStatus, arg.ToStatus, arg.ID, arg.AllowedFrom)
+	var i Booking
+	err := row.Scan(
+		&i.ID,
+		&i.Reference,
+		&i.CourtID,
+		&i.Period,
+		&i.Status,
+		&i.CustomerName,
+		&i.CustomerPhone,
+		&i.PriceIdr,
+		&i.DepositIdr,
+		&i.HoldExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const expireHolds = `-- name: ExpireHolds :execrows
+update booking
+set status = 'expired', hold_expires_at = null, updated_at = now()
+where status = 'held' and hold_expires_at <= now()
+`
+
+// The periodic sweep: frees every hold whose ten minutes are over.
+func (q *Queries) ExpireHolds(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, expireHolds)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const expireOverlappingHolds = `-- name: ExpireOverlappingHolds :execrows
 update booking
 set status = 'expired', hold_expires_at = null, updated_at = now()
@@ -33,6 +83,76 @@ func (q *Queries) ExpireOverlappingHolds(ctx context.Context, arg ExpireOverlapp
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const getBookingByID = `-- name: GetBookingByID :one
+select booking.id, booking.reference, booking.court_id, booking.period, booking.status, booking.customer_name, booking.customer_phone, booking.price_idr, booking.deposit_idr, booking.hold_expires_at, booking.created_at, booking.updated_at, court.name as court_name, court.sport
+from booking
+join court on court.id = booking.court_id
+where booking.id = $1
+`
+
+type GetBookingByIDRow struct {
+	Booking   Booking
+	CourtName string
+	Sport     string
+}
+
+func (q *Queries) GetBookingByID(ctx context.Context, id pgtype.UUID) (GetBookingByIDRow, error) {
+	row := q.db.QueryRow(ctx, getBookingByID, id)
+	var i GetBookingByIDRow
+	err := row.Scan(
+		&i.Booking.ID,
+		&i.Booking.Reference,
+		&i.Booking.CourtID,
+		&i.Booking.Period,
+		&i.Booking.Status,
+		&i.Booking.CustomerName,
+		&i.Booking.CustomerPhone,
+		&i.Booking.PriceIdr,
+		&i.Booking.DepositIdr,
+		&i.Booking.HoldExpiresAt,
+		&i.Booking.CreatedAt,
+		&i.Booking.UpdatedAt,
+		&i.CourtName,
+		&i.Sport,
+	)
+	return i, err
+}
+
+const getBookingByReference = `-- name: GetBookingByReference :one
+select booking.id, booking.reference, booking.court_id, booking.period, booking.status, booking.customer_name, booking.customer_phone, booking.price_idr, booking.deposit_idr, booking.hold_expires_at, booking.created_at, booking.updated_at, court.name as court_name, court.sport
+from booking
+join court on court.id = booking.court_id
+where booking.reference = $1
+`
+
+type GetBookingByReferenceRow struct {
+	Booking   Booking
+	CourtName string
+	Sport     string
+}
+
+func (q *Queries) GetBookingByReference(ctx context.Context, reference string) (GetBookingByReferenceRow, error) {
+	row := q.db.QueryRow(ctx, getBookingByReference, reference)
+	var i GetBookingByReferenceRow
+	err := row.Scan(
+		&i.Booking.ID,
+		&i.Booking.Reference,
+		&i.Booking.CourtID,
+		&i.Booking.Period,
+		&i.Booking.Status,
+		&i.Booking.CustomerName,
+		&i.Booking.CustomerPhone,
+		&i.Booking.PriceIdr,
+		&i.Booking.DepositIdr,
+		&i.Booking.HoldExpiresAt,
+		&i.Booking.CreatedAt,
+		&i.Booking.UpdatedAt,
+		&i.CourtName,
+		&i.Sport,
+	)
+	return i, err
 }
 
 const insertHold = `-- name: InsertHold :one
@@ -70,6 +190,199 @@ func (q *Queries) InsertHold(ctx context.Context, arg InsertHoldParams) (Booking
 		arg.DepositIdr,
 		arg.HoldFor,
 	)
+	var i Booking
+	err := row.Scan(
+		&i.ID,
+		&i.Reference,
+		&i.CourtID,
+		&i.Period,
+		&i.Status,
+		&i.CustomerName,
+		&i.CustomerPhone,
+		&i.PriceIdr,
+		&i.DepositIdr,
+		&i.HoldExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const insertWalkIn = `-- name: InsertWalkIn :one
+insert into booking (
+    reference, court_id, period, status, customer_name, customer_phone, price_idr, deposit_idr
+) values (
+    $1, $2, $3::tstzrange, 'walk_in',
+    $4, $5, $6, 0
+)
+returning id, reference, court_id, period, status, customer_name, customer_phone, price_idr, deposit_idr, hold_expires_at, created_at, updated_at
+`
+
+type InsertWalkInParams struct {
+	Reference     string
+	CourtID       pgtype.UUID
+	Period        pgtype.Range[pgtype.Timestamptz]
+	CustomerName  string
+	CustomerPhone string
+	PriceIdr      int32
+}
+
+func (q *Queries) InsertWalkIn(ctx context.Context, arg InsertWalkInParams) (Booking, error) {
+	row := q.db.QueryRow(ctx, insertWalkIn,
+		arg.Reference,
+		arg.CourtID,
+		arg.Period,
+		arg.CustomerName,
+		arg.CustomerPhone,
+		arg.PriceIdr,
+	)
+	var i Booking
+	err := row.Scan(
+		&i.ID,
+		&i.Reference,
+		&i.CourtID,
+		&i.Period,
+		&i.Status,
+		&i.CustomerName,
+		&i.CustomerPhone,
+		&i.PriceIdr,
+		&i.DepositIdr,
+		&i.HoldExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listDayBookingsForOwner = `-- name: ListDayBookingsForOwner :many
+select booking.id, booking.reference, booking.court_id, booking.period, booking.status, booking.customer_name, booking.customer_phone, booking.price_idr, booking.deposit_idr, booking.hold_expires_at, booking.created_at, booking.updated_at, court.name as court_name, court.sport
+from booking
+join court on court.id = booking.court_id
+where booking.period && tstzrange($1::timestamptz, $2::timestamptz, '[)')
+    and (booking.status in ('confirmed', 'walk_in', 'no_show')
+        or (booking.status = 'held' and booking.hold_expires_at > now()))
+order by court.sort_order, lower(booking.period)
+`
+
+type ListDayBookingsForOwnerParams struct {
+	FromTime pgtype.Timestamptz
+	ToTime   pgtype.Timestamptz
+}
+
+type ListDayBookingsForOwnerRow struct {
+	Booking   Booking
+	CourtName string
+	Sport     string
+}
+
+// The board also shows no-shows, so the owner sees what happened to the slot.
+func (q *Queries) ListDayBookingsForOwner(ctx context.Context, arg ListDayBookingsForOwnerParams) ([]ListDayBookingsForOwnerRow, error) {
+	rows, err := q.db.Query(ctx, listDayBookingsForOwner, arg.FromTime, arg.ToTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDayBookingsForOwnerRow
+	for rows.Next() {
+		var i ListDayBookingsForOwnerRow
+		if err := rows.Scan(
+			&i.Booking.ID,
+			&i.Booking.Reference,
+			&i.Booking.CourtID,
+			&i.Booking.Period,
+			&i.Booking.Status,
+			&i.Booking.CustomerName,
+			&i.Booking.CustomerPhone,
+			&i.Booking.PriceIdr,
+			&i.Booking.DepositIdr,
+			&i.Booking.HoldExpiresAt,
+			&i.Booking.CreatedAt,
+			&i.Booking.UpdatedAt,
+			&i.CourtName,
+			&i.Sport,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOccupyingBookings = `-- name: ListOccupyingBookings :many
+select booking.id, booking.reference, booking.court_id, booking.period, booking.status, booking.customer_name, booking.customer_phone, booking.price_idr, booking.deposit_idr, booking.hold_expires_at, booking.created_at, booking.updated_at, court.name as court_name, court.sport
+from booking
+join court on court.id = booking.court_id
+where booking.period && tstzrange($1::timestamptz, $2::timestamptz, '[)')
+    and (booking.status in ('confirmed', 'walk_in')
+        or (booking.status = 'held' and booking.hold_expires_at > now()))
+order by court.sort_order, lower(booking.period)
+`
+
+type ListOccupyingBookingsParams struct {
+	FromTime pgtype.Timestamptz
+	ToTime   pgtype.Timestamptz
+}
+
+type ListOccupyingBookingsRow struct {
+	Booking   Booking
+	CourtName string
+	Sport     string
+}
+
+// Bookings that hold a court during [from, to): confirmed, walk-in, and holds still running.
+func (q *Queries) ListOccupyingBookings(ctx context.Context, arg ListOccupyingBookingsParams) ([]ListOccupyingBookingsRow, error) {
+	rows, err := q.db.Query(ctx, listOccupyingBookings, arg.FromTime, arg.ToTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOccupyingBookingsRow
+	for rows.Next() {
+		var i ListOccupyingBookingsRow
+		if err := rows.Scan(
+			&i.Booking.ID,
+			&i.Booking.Reference,
+			&i.Booking.CourtID,
+			&i.Booking.Period,
+			&i.Booking.Status,
+			&i.Booking.CustomerName,
+			&i.Booking.CustomerPhone,
+			&i.Booking.PriceIdr,
+			&i.Booking.DepositIdr,
+			&i.Booking.HoldExpiresAt,
+			&i.Booking.CreatedAt,
+			&i.Booking.UpdatedAt,
+			&i.CourtName,
+			&i.Sport,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reschedule = `-- name: Reschedule :one
+update booking
+set court_id = $1, period = $2::tstzrange, updated_at = now()
+where id = $3 and status in ('confirmed', 'walk_in')
+returning id, reference, court_id, period, status, customer_name, customer_phone, price_idr, deposit_idr, hold_expires_at, created_at, updated_at
+`
+
+type RescheduleParams struct {
+	CourtID pgtype.UUID
+	Period  pgtype.Range[pgtype.Timestamptz]
+	ID      pgtype.UUID
+}
+
+func (q *Queries) Reschedule(ctx context.Context, arg RescheduleParams) (Booking, error) {
+	row := q.db.QueryRow(ctx, reschedule, arg.CourtID, arg.Period, arg.ID)
 	var i Booking
 	err := row.Scan(
 		&i.ID,

@@ -30,7 +30,7 @@ jobs:
       DATABASE_URL: postgres://court:court@localhost:5432/court_booking?sslmode=disable
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: api/go.mod
           cache-dependency-path: api/go.sum

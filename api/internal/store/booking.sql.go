@@ -126,18 +126,22 @@ func (q *Queries) GetBookingByID(ctx context.Context, id pgtype.UUID) (GetBookin
 }
 
 const getBookingByReference = `-- name: GetBookingByReference :one
-select booking.id, booking.reference, booking.court_id, booking.period, booking.status, booking.customer_name, booking.customer_phone, booking.price_idr, booking.deposit_idr, booking.hold_expires_at, booking.created_at, booking.updated_at, court.name as court_name, court.sport
+select booking.id, booking.reference, booking.court_id, booking.period, booking.status, booking.customer_name, booking.customer_phone, booking.price_idr, booking.deposit_idr, booking.hold_expires_at, booking.created_at, booking.updated_at, court.name as court_name, court.sport,
+    (booking.status = 'held' and booking.hold_expires_at <= now())::boolean as hold_lapsed
 from booking
 join court on court.id = booking.court_id
 where booking.reference = $1
 `
 
 type GetBookingByReferenceRow struct {
-	Booking   Booking
-	CourtName string
-	Sport     string
+	Booking    Booking
+	CourtName  string
+	Sport      string
+	HoldLapsed bool
 }
 
+// hold_lapsed is true for a hold whose ten minutes are over but that the sweep has not marked
+// yet; it uses the database clock, like the hold itself.
 func (q *Queries) GetBookingByReference(ctx context.Context, reference string) (GetBookingByReferenceRow, error) {
 	row := q.db.QueryRow(ctx, getBookingByReference, reference)
 	var i GetBookingByReferenceRow
@@ -156,6 +160,7 @@ func (q *Queries) GetBookingByReference(ctx context.Context, reference string) (
 		&i.Booking.UpdatedAt,
 		&i.CourtName,
 		&i.Sport,
+		&i.HoldLapsed,
 	)
 	return i, err
 }

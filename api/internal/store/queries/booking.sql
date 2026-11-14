@@ -54,7 +54,10 @@ where id in (
 );
 
 -- name: GetBookingByReference :one
-select sqlc.embed(booking), court.name as court_name, court.sport
+-- hold_lapsed is true for a hold whose ten minutes are over but that the sweep has not marked
+-- yet; it uses the database clock, like the hold itself.
+select sqlc.embed(booking), court.name as court_name, court.sport,
+    (booking.status = 'held' and booking.hold_expires_at <= now())::boolean as hold_lapsed
 from booking
 join court on court.id = booking.court_id
 where booking.reference = sqlc.arg(reference);

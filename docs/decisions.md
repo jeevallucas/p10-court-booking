@@ -306,9 +306,8 @@ revisit it.
   or 1, every visitor showed as 127.0.0.1 and would have shared one.
 - Consequences: no one-minute wake-up (a cold start took about 0.5 s), so the wake-up note was
   removed. The worker and the expiry sweep run only while an instance is active. Bookings stay
-  correct: every write, the availability list and the owner board treat a hold past its time as
-  free. A player's status page shows "expired" at the next sweep, within 30 seconds, because
-  its polling keeps the instance active. Rate limits
+  correct: every write, the availability list, the owner board and the player's status page treat
+  a hold past its time as expired by the database clock, without waiting for the sweep. Rate limits
   are per instance. Deploys run `vercel deploy` from a copy of the folder without git history:
   the Hobby plan blocks deployments whose commit author (a GitHub noreply address) it cannot
   match to the account. `api/Dockerfile` and `compose.yaml` still run the long-lived server.

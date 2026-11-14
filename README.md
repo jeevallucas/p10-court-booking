@@ -71,8 +71,8 @@ and puts it back if the API answers 409.
   Cost: the load test showed that two overlapping inserts can deadlock on it, so every booking
   write now also locks the court's row first, and writes for one court take turns.
 - **I chose expiring holds by the database clock, on every write and read, over a timer alone**,
-  so a hold whose time is over never blocks a slot even if the sweep is late. Cost: the row still
-  says `held` until the 30-second sweep marks it, so the player's status page can lag by that much.
+  so a hold whose time is over never blocks a slot and reads as expired even if the sweep is late.
+  Cost: every query that reads holds must compare their expiry with the clock, not only the status.
 - **I chose recording each payment notification once per (transaction, status) under a lock on
   the booking over trusting the booking's current status**, because providers retry and reorder
   deliveries. Cost: a payment that arrives after someone else took the slot cannot be undone

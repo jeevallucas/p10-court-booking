@@ -47,7 +47,7 @@ Each milestone ends with a commit and a push. Done means the listed check passes
 - GitHub Actions for Go, web, contract, and end-to-end jobs.
 
 ## 7. Demo, README, review, publish
-- Neon database, Render API, Vercel web app, nightly reseed workflow, demo owner login in the
-  README.
+- Neon database, the API and the web app on Vercel (Render needed a card; docs/decisions.md),
+  nightly reseed workflow, demo owner login in the README.
 - Demo recording, README, fresh-clone check, /code-review, hiring-manager audit, secret and
   forbidden-terms scan, then public.

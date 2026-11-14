@@ -292,3 +292,25 @@ func TestOwnerWritesQueueBehindAnotherWriterOnTheSameCourt(t *testing.T) {
 		})
 	})
 }
+
+func TestAHoldWhoseTimeIsOverReadsAsExpiredBeforeTheSweep(t *testing.T) {
+	service, venue := newService(t, local(10, 0))
+	ctx := context.Background()
+	held, err := service.HoldForPlayer(ctx, playerHold(venue.Badminton[0], local(19, 0), 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Pool.Exec(ctx,
+		"update booking set hold_expires_at = now() - interval '1 second' where id = $1", held.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	view, err := service.ByReference(ctx, held.Reference)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Status != store.BookingStatusExpired || view.HoldExpiresAt.Valid {
+		t.Fatalf("got status %s with hold_expires_at valid=%v, want expired and no expiry time",
+			view.Status, view.HoldExpiresAt.Valid)
+	}
+}

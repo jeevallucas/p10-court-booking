@@ -258,6 +258,11 @@ func (s *Service) ByReference(ctx context.Context, reference string) (View, erro
 	if err != nil {
 		return View{}, fmt.Errorf("get booking: %w", err)
 	}
+	// The player sees an ended hold as expired at once, not only after the next sweep.
+	if row.HoldLapsed {
+		row.Booking.Status = store.BookingStatusExpired
+		row.Booking.HoldExpiresAt = pgtype.Timestamptz{}
+	}
 	return View{Booking: row.Booking, CourtName: row.CourtName, Sport: row.Sport}, nil
 }
 
@@ -441,12 +446,15 @@ func (s *Service) ChangeStatus(ctx context.Context, id pgtype.UUID, to store.Boo
 	for i, status := range from {
 		fromText[i] = string(status)
 	}
-	// Confirming a hold at the desk puts it back under the constraint, so lock the court first.
+	// Confirming writes a new version of the row that the exclusion constraint checks again, so
+	// it takes the court lock like any booking write. Cancelling and no-shows free the court.
 	var changed store.Booking
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		txq := store.New(tx)
-		if err := txq.LockCourtOfBooking(ctx, id); err != nil {
-			return fmt.Errorf("lock court: %w", err)
+		if to == store.BookingStatusConfirmed {
+			if err := txq.LockCourtOfBooking(ctx, id); err != nil {
+				return fmt.Errorf("lock court: %w", err)
+			}
 		}
 		var changeErr error
 		changed, changeErr = txq.ChangeStatus(ctx, store.ChangeStatusParams{

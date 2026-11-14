@@ -38,6 +38,10 @@ jobs:
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
       - name: Check generated queries are up to date
         run: docker run --rm -v "$PWD:/src" -w /src sqlc/sqlc:1.31.1 diff
+      - name: Check the generated server matches openapi.yaml
+        run: |
+          go tool oapi-codegen -config oapi-codegen.yaml ../openapi.yaml
+          git diff --exit-code internal/httpapi/openapi.gen.go
       - uses: golangci/golangci-lint-action@v8
         with:
           working-directory: api

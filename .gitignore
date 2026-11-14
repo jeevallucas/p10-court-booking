@@ -1,0 +1,24 @@
+# Local configuration and credentials
+.env
+.env.local
+*.pem
+
+# Go
+/api/bin/
+*.test
+coverage.out
+
+# Node and Next.js
+node_modules/
+/web/.next/
+/web/out/
+/web/playwright-report/
+/web/test-results/
+*.tsbuildinfo
+next-env.d.ts
+
+# Load test output
+/loadtest/results/
+
+# Screenshot review rounds (final screenshots live in docs/screenshots/)
+docs/screenshots/review/

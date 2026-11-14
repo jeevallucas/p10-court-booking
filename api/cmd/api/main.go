@@ -97,6 +97,14 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	}
 	handler := http.NewServeMux()
 	handler.Handle("/", api)
+	// The host checks this before routing traffic to a new deploy; it fails without the database.
+	handler.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		if err := pool.Ping(r.Context()); err != nil {
+			http.Error(w, "database unreachable", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	handler.Handle("/fakepay/", fakepay.Handler(fakepay.Config{
 		Bookings:        bookings,
 		ServerKey:       serverKey,

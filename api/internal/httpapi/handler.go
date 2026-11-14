@@ -99,7 +99,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		},
 	})(routes)
 
-	return withRequestLog(cfg.Logger, http.MaxBytesHandler(validated, maxBodyBytes)), nil
+	return withRequestLog(cfg.Logger, cfg.TrustedProxyHops, http.MaxBytesHandler(validated, maxBodyBytes)), nil
 }
 
 type contextKey int
@@ -211,8 +211,9 @@ func writeProblem(w http.ResponseWriter, status int, p ProblemJSONResponse) {
 var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9-]{8,64}$`)
 
 // withRequestLog tags each request with an ID (the caller's, if it sent a sane one), returns it
-// in X-Request-ID, and logs one JSON line per request.
-func withRequestLog(logger *slog.Logger, next http.Handler) http.Handler {
+// in X-Request-ID, and logs one JSON line per request. The line includes the client address the
+// rate limiter uses, which shows whether TRUSTED_PROXY_HOPS matches the proxies in front.
+func withRequestLog(logger *slog.Logger, trustedHops int, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Header.Get("X-Request-ID")
 		if !requestIDPattern.MatchString(id) {
@@ -229,6 +230,7 @@ func withRequestLog(logger *slog.Logger, next http.Handler) http.Handler {
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", recorder.status,
+			"client", clientIP(r, trustedHops),
 			"duration_ms", time.Since(started).Milliseconds())
 	})
 }

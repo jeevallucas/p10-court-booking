@@ -271,3 +271,19 @@ revisit it.
   court now finish with p95 360 to 517 ms on a laptop and no errors. A new booking write must
   call LockCourt first; tests check that each existing write waits for another writer's lock.
 
+## 2026-11-14 Host the demo on Vercel, Render and Neon, all in Singapore
+
+- Context: the demo must stay online for free, close to players in Indonesia, and show the real
+  architecture (a Go API, a Next.js app, PostgreSQL) rather than a single serverless app.
+- Options: (a) everything on one free container host, which no longer exists without a card;
+  (b) Vercel Hobby for the web app, Render's free web service for the API and its worker, and
+  Neon's free PostgreSQL, each in its Singapore region.
+- Decision: (b). Neon supports `btree_gist`, so the exclusion constraint works as in
+  development. The API is described in `render.yaml`, built from `api/Dockerfile`, and checked
+  at `/healthz`; the web app's server functions run in `sin1` (`web/vercel.json`).
+- Consequences: Render's free service sleeps after 15 idle minutes and takes about a minute to
+  wake, so the first visitor waits; the web app says so after five seconds of loading instead of
+  looking broken. Neon's free compute also suspends when idle, which adds a second or two.
+  `docker compose up --build` runs the same images locally for reviewers who prefer that.
+- Revisit if: the demo needs to answer instantly; a paid instance removes the sleep.
+

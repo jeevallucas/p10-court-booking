@@ -1,0 +1,27 @@
+name: Reseed the demo
+
+# Every night at 02.00 WIB the public demo goes back to a fresh fictional schedule, so visitors
+# never find it empty or full of test bookings (docs/decisions.md).
+on:
+  schedule:
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reseed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+      - name: Reseed the demo database
+        working-directory: api
+        env:
+          DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}
+          DEMO_OWNER_PASSWORD: arena-demo-2026
+        run: go run ./cmd/seed

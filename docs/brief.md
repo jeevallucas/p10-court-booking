@@ -23,13 +23,14 @@ work.
 ## Constraints
 - A slot can never be booked twice, even when many players try at the same moment.
 - A player's slot is held while they pay; an unpaid hold must expire on its own.
-- Payment is the Midtrans sandbox; no real money moves. Payment notifications can arrive late,
-  twice, or out of order.
+- No real money moves. Payment uses a fake provider with the Midtrans sandbox's signed
+  notification contract, because the sandbox account could not be opened (docs/decisions.md).
+  Payment notifications can arrive late, twice, or out of order.
 - No real SMS or WhatsApp messages are sent; confirmations go to a local mail catcher in
   development and to logs in the demo.
-- The demo runs on free tiers: Vercel Hobby for the web app, Render's free web service for the API
-  (it sleeps after 15 minutes idle and takes about a minute to wake), and Neon's free Postgres
-  (1 GB storage per project).
+- The demo runs on free tiers without a credit card: Vercel Hobby for the web app and the API, and
+  Neon's free Postgres (1 GB storage per project). Render was the first choice for the API but
+  asks for a card even for free services (docs/decisions.md).
 - The interface is in Indonesian, with WIB times and Rupiah amounts; code and documents are in
   English.
 

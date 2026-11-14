@@ -5,12 +5,11 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { api, type Availability } from "@/api/client";
 import { longDate, rupiah, timeLabel } from "@/lib/format";
+import { compactPhone, isIndonesianMobile, phoneHint } from "@/lib/phone";
 import { problemMessage } from "@/lib/problems";
 import { deposit, nextHourFree, type FreeCourt } from "@/lib/slots";
 
 import styles from "./BookingDialog.module.css";
-
-const phonePattern = /^(\+62|62|0)8[0-9]{8,11}$/;
 
 interface Props {
   chosen: FreeCourt;
@@ -40,11 +39,8 @@ export function BookingDialog({ chosen, availability, onClose, onSlotTaken }: Pr
   const price = chosen.slot.priceIdr + (hours === 2 && secondHour ? secondHour.priceIdr : 0);
   const end = hours === 2 && secondHour ? secondHour.end : chosen.slot.end;
 
-  const compactPhone = phone.replace(/[\s-]/g, "");
   const nameError = name.trim().length < 2 ? "Tulis nama pemesan, minimal 2 huruf." : "";
-  const phoneError = phonePattern.test(compactPhone)
-    ? ""
-    : "Tulis nomor WhatsApp yang dimulai 08, 628, atau +628.";
+  const phoneError = isIndonesianMobile(phone) ? "" : phoneHint;
 
   const hold = useMutation({
     mutationFn: async () => {
@@ -54,7 +50,7 @@ export function BookingDialog({ chosen, availability, onClose, onSlotTaken }: Pr
           start: chosen.slot.start,
           hours,
           customerName: name.trim(),
-          customerPhone: compactPhone,
+          customerPhone: compactPhone(phone),
         },
       });
       if (!data) {

@@ -1,9 +1,9 @@
-// Captures every player screen and state at three widths, and runs axe on each, for the
-// design review loop (docs/design-review.md) and the README screenshots.
+// Captures every player and owner screen and state at several widths, and runs axe on the
+// main ones, for the design review loop (docs/design-review.md) and the README screenshots.
 //
 // Usage: node scripts/capture-screens.mjs <output-dir>
 // Needs the web app on WEB_URL (default http://localhost:3000) and the API behind it, seeded.
-// It places one real hold, which expires on its own after 10 minutes.
+// It places up to two real holds, which expire on their own after 10 minutes.
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -22,6 +22,8 @@ const viewports = [
   { name: "768", width: 768, height: 1024 },
   { name: "1440", width: 1440, height: 900 },
 ];
+// The owner works on a laptop; 1366 x 768 is the size the design brief plans the board for.
+const ownerViewports = [...viewports, { name: "1366", width: 1366, height: 768 }];
 
 const browser = await chromium.launch();
 const axeResults = {};
@@ -42,6 +44,12 @@ async function shot(page, label, { axe = false } = {}) {
   }
 }
 
+function venueDay(offsetDays) {
+  return new Date(Date.now() + offsetDays * 24 * 3600_000).toLocaleDateString("en-CA", {
+    timeZone: "Asia/Jakarta",
+  });
+}
+
 async function tomorrowSchedule(page) {
   await page.goto(base);
   await page.locator("[aria-pressed]").nth(1).click();
@@ -51,9 +59,26 @@ async function tomorrowSchedule(page) {
     .waitFor();
 }
 
-const hold = await placeHold();
+await mkdir(out, { recursive: true });
+const hold = await placeHold(venueDay(1), "Dewi Lestari", "081298765432");
+// A hold today puts a "Menunggu DP" block on the owner's board; late at night there may be none.
+await placeHold(venueDay(0), "Bayu Pratama", "081311112222").catch((error) =>
+  console.warn(`No hold today, so the board shows no held booking: ${error.message}`),
+);
 
 for (const viewport of viewports) {
+  await capturePlayer(viewport);
+}
+for (const viewport of ownerViewports) {
+  await captureOwner(viewport);
+}
+
+await browser.close();
+await writeFile(join(out, "axe.json"), JSON.stringify(axeResults, null, 2));
+const total = Object.values(axeResults).reduce((sum, list) => sum + list.length, 0);
+console.log(`Saved screenshots to ${out}; axe violations: ${total}`);
+
+async function capturePlayer(viewport) {
   const context = await browser.newContext({ viewport, locale: "id-ID" });
   const page = await context.newPage();
   const at = (label) => `${label}-${viewport.name}`;
@@ -127,23 +152,113 @@ for (const viewport of viewports) {
   await context.close();
 }
 
-await browser.close();
-await writeFile(join(out, "axe.json"), JSON.stringify(axeResults, null, 2));
-const total = Object.values(axeResults).reduce((sum, list) => sum + list.length, 0);
-console.log(`Saved screenshots to ${out}; axe violations: ${total}`);
+async function captureOwner(viewport) {
+  const context = await browser.newContext({ viewport, locale: "id-ID" });
+  const page = await context.newPage();
+  const at = (label) => `${label}-${viewport.name}`;
 
-/** Holds the first free hour tomorrow through the API, as a player would. */
-async function placeHold() {
-  await mkdir(out, { recursive: true });
-  const tomorrow = new Date(Date.now() + 24 * 3600_000).toLocaleDateString("en-CA", {
-    timeZone: "Asia/Jakarta",
+  await page.goto(`${base}/owner/login`);
+  await page.getByRole("heading", { level: 1 }).waitFor();
+  await shot(page, at("11-owner-login"), { axe: true });
+  await page.getByRole("button", { name: "Isi akun demo" }).click();
+  await page.getByRole("button", { name: "Masuk", exact: true }).click();
+  await page.waitForURL("**/owner");
+  await page.locator("[data-status]").first().waitFor();
+  await page.waitForLoadState("networkidle");
+  await shot(page, at("12-owner-board"), { axe: true });
+
+  for (let press = 0; press < 6; press += 1) {
+    await page.keyboard.press("Tab");
+  }
+  await page.screenshot({ path: join(out, `${at("13-owner-keyboard-focus")}.png`) });
+
+  const held = page.locator('[data-status="held"]').first();
+  const chosen = (await held.count()) ? held : page.locator('[data-movable="true"]').first();
+  await chosen.scrollIntoViewIfNeeded();
+  await chosen.click();
+  await page.getByRole("button", { name: "Tutup" }).waitFor();
+  await shot(page, at("14-owner-panel"), { axe: true });
+  await page.getByRole("button", { name: "Tutup" }).click();
+
+  await page.getByRole("button", { name: "Tambah walk-in" }).click();
+  const save = page.getByRole("button", { name: "Simpan walk-in" });
+  // Saving without a name shows the form's errors; when every court is busy it stays disabled.
+  if (await save.isEnabled()) {
+    await save.click();
+  }
+  await shot(page, at("15-owner-walk-in"), { axe: true });
+  await page.getByRole("button", { name: "Tutup" }).click();
+
+  if (viewport.width >= 1024) {
+    await dragIntoConflict(page, at);
+  }
+
+  await page.route("**/v1/owner/bookings**", async (route) => {
+    const response = await route.fetch();
+    const day = await response.json();
+    await route.fulfill({ response, json: { ...day, bookings: [] } });
   });
-  const availability = await fetch(`${base}/v1/availability?date=${tomorrow}&sport=badminton`).then(
+  await page.reload();
+  await page.getByText(/Belum ada booking/).waitFor();
+  await shot(page, at("18-owner-empty"));
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+
+  await page.route("**/v1/owner/bookings**", (route) => route.abort("connectionfailed"));
+  await page.reload();
+  await page.getByText(/Jadwal gagal dimuat/).waitFor({ timeout: 10_000 });
+  await shot(page, at("19-owner-error"));
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+
+  await page.route("**/v1/owner/bookings**", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await route.continue().catch(() => {});
+  });
+  await page.reload();
+  await page.waitForTimeout(700);
+  await shot(page, at("20-owner-loading"));
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+
+  await context.close();
+}
+
+/** Drags a movable booking onto the next booking below it on the same court. */
+async function dragIntoConflict(page, at) {
+  const movable = page.locator('[data-movable="true"]');
+  for (let index = 0; index < (await movable.count()); index += 1) {
+    const block = movable.nth(index);
+    await block.scrollIntoViewIfNeeded();
+    const from = await block.boundingBox();
+    const column = block.locator("xpath=..");
+    const others = column.locator('[data-status]:not([data-status="no_show"])');
+    for (let other = 0; other < (await others.count()); other += 1) {
+      const to = await others.nth(other).boundingBox();
+      const visible = to && to.y > from.y + from.height && to.y + 10 < page.viewportSize().height;
+      if (!visible) {
+        continue;
+      }
+      await page.mouse.move(from.x + from.width / 2, from.y + 6);
+      await page.mouse.down();
+      await page.mouse.move(to.x + to.width / 2, to.y + 12, { steps: 8 });
+      await shot(page, at("16-owner-drag-conflict"));
+      await page.mouse.up();
+      await page.getByText(/tidak dipindah/).waitFor();
+      await shot(page, at("17-owner-drop-refused"));
+      return;
+    }
+  }
+  console.warn("No visible pair of bookings to drag into a conflict; skipped the drag shots.");
+}
+
+/** Holds the first free badminton hour on `day` through the API, as a player would. */
+async function placeHold(day, customerName, customerPhone) {
+  const availability = await fetch(`${base}/v1/availability?date=${day}&sport=badminton`).then(
     (response) => response.json(),
   );
-  const free = availability.slots.find((slot) => slot.available);
+  const free = availability.slots.find(
+    (slot) => slot.available && Date.parse(slot.start) > Date.now(),
+  );
   if (!free) {
-    throw new Error(`No free badminton hour on ${tomorrow}; reseed the database and retry.`);
+    throw new Error(`No free badminton hour on ${day}; reseed the database and retry.`);
   }
   const response = await fetch(`${base}/v1/holds`, {
     method: "POST",
@@ -152,8 +267,8 @@ async function placeHold() {
       courtId: free.courtId,
       start: free.start,
       hours: 1,
-      customerName: "Dewi Lestari",
-      customerPhone: "081298765432",
+      customerName,
+      customerPhone,
     }),
   });
   if (!response.ok) {

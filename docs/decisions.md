@@ -213,3 +213,43 @@ revisit it.
   would buy only request matching the tests do not need. The full path through the real API is
   covered by the end-to-end tests in milestone 6.
 - Revisit if: tests start needing request matching or many endpoints per test.
+
+## 2026-11-14 Render date-dependent pages per request
+
+- Context: the schedule and the owner board start at today in WIB. Next.js prerendered the
+  schedule at build time, so a deploy would keep showing its build day and the browser would
+  fail hydration when its own date differed.
+- Options: (a) render the date parts only in the browser, with placeholders on the server;
+  (b) render those two pages per request (`connection()` in the page).
+- Decision: (b). Server and browser compute the same day, nothing shifts after hydration, and
+  the server work is a few milliseconds of HTML. The status page was already per request.
+- Revisit if: hosting costs per request start to matter.
+
+## 2026-11-14 Drag bookings with pointer events, and move them from the panel on touch
+
+- Context: the owner moves a booking by dragging it on a uniform grid of half-hour rows, and
+  needs a keyboard way to do the same.
+- Options: (a) a drag-and-drop library such as dnd-kit; (b) pointer events and the grid's own
+  geometry, about 60 lines, with the side panel's court and start-time fields as the keyboard
+  and touch alternative.
+- Decision: (b). With equal rows, the target cell is one division, and the library would still
+  need custom snapping and collision rules. Touch keeps scrolling the board instead of starting
+  drags; on a tablet the panel moves bookings.
+- Consequences: no drag on touch screens. The drag state lives in a ref, because a quick drop
+  can arrive before React renders the last move.
+- Revisit if: owners ask for dragging on tablets.
+
+## 2026-11-14 Show the demo owner account on the login page
+
+- Context: reviewers should reach the owner board without asking for credentials.
+- Options: (a) only in the README; (b) on the login page, with a button that fills it in.
+- Decision: (b). The account owns only the fictional venue's data, the nightly reseed restores
+  it, and logins are rate-limited. The seed reads the same password from DEMO_OWNER_PASSWORD.
+- Consequences: anyone can change the demo board until the next reseed.
+
+## 2026-11-14 Label paid bookings "Terkonfirmasi", not "Lunas"
+
+- Context: the design brief named the confirmed state "Lunas" (paid in full), but a confirmed
+  booking has usually paid only the deposit and owes the rest at the desk.
+- Decision: the board and panel say "Terkonfirmasi" and the panel shows what is still due at
+  the desk, so the owner does not wave through a player who still owes money.

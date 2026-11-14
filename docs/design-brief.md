@@ -51,7 +51,7 @@ board should read like the scoreboard on the hall wall, not like a game.
 
 Muted text is #55605A (6.0:1 on shuttle white). Free slots are white with a 1 px #C9CFC9 border.
 
-Each state also has a text label inside its block (Lunas, Menunggu DP, Walk-in, Tidak datang), and
+Each state also has a text label inside its block (Terkonfirmasi, Menunggu DP, Walk-in, Tidak datang; "Lunas" was dropped because a confirmed booking may still owe the rest at the desk, see docs/decisions.md), and
 the held state has stripes, so colour is never the only signal. The two light fills (amber, grey)
 are below 3:1 against the background, so their blocks carry a 2 px border in the darker tone. A
 palette validator found the four state colours clearly distinct for normal and colour-blind vision

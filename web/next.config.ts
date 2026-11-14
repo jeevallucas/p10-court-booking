@@ -5,6 +5,8 @@ import type { NextConfig } from "next";
 const apiUrl = process.env.API_URL ?? "http://localhost:8080";
 
 const nextConfig: NextConfig = {
+  // A self-contained server for the Docker image; Vercel builds the app its own way.
+  output: "standalone",
   async rewrites() {
     return [
       { source: "/v1/:path*", destination: `${apiUrl}/v1/:path*` },

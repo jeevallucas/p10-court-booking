@@ -1,3 +1,6 @@
+# `docker compose up --build` runs the whole demo: PostgreSQL, a fresh seed, the API with its
+# notification worker, Mailpit, and the web app on http://localhost:3000.
+# For development, `docker compose up -d db mailpit` starts only the database and mail catcher.
 services:
   db:
     image: postgres:17-alpine
@@ -15,12 +18,50 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
 
-  # Catches the outbox's messages in development; open http://localhost:8025 to read them.
+  # Catches the outbox's messages; open http://localhost:8025 to read them.
   mailpit:
     image: axllent/mailpit:v1.27
     ports:
       - "1025:1025"
       - "8025:8025"
+
+  # Resets the demo venue and two weeks of bookings on every `up`, then exits.
+  seed:
+    build: ./api
+    image: p10-court-booking-api:local
+    entrypoint: ["/seed"]
+    environment:
+      DATABASE_URL: postgres://court:court@db:5432/court_booking?sslmode=disable
+      DEMO_OWNER_PASSWORD: arena-demo-2026
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    image: p10-court-booking-api:local
+    environment:
+      DATABASE_URL: postgres://court:court@db:5432/court_booking?sslmode=disable
+      PAYMENT_SERVER_KEY: compose-only-payment-key
+      PUBLIC_WEB_URL: http://localhost:3000
+      SMTP_ADDR: mailpit:1025
+      COOKIE_SECURE: "false"
+    ports:
+      - "8080:8080"
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+
+  web:
+    build:
+      context: ./web
+      args:
+        API_URL: http://api:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
 
 volumes:
   db-data:

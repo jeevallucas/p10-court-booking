@@ -88,8 +88,8 @@ export function BookingPanel({
         )}
         {occupiesCourt && (
           <div>
-            <dt>{booking.status === "held" ? "Bayar di kasir" : "Sisa di kasir"}</dt>
-            <dd>{rupiah(booking.status === "held" ? booking.priceIdr : dueAtDesk)}</dd>
+            <dt>Sisa di kasir</dt>
+            <dd>{rupiah(dueAtDesk)}</dd>
           </div>
         )}
       </dl>
@@ -97,8 +97,9 @@ export function BookingPanel({
       {booking.status === "held" && (
         <div className={styles.section}>
           <p>
-            Pemain belum membayar DP online. Slot dilepas otomatis pukul{" "}
-            {booking.holdExpiresAt ? timeLabel(booking.holdExpiresAt) : "-"} kalau belum dibayar.
+            Pemain belum membayar DP online. Kalau DP dibayar di kasir, tandai di sini; kalau tidak,
+            slot dilepas otomatis pukul{" "}
+            {booking.holdExpiresAt ? timeLabel(booking.holdExpiresAt) : "-"}.
           </p>
           <button
             type="button"
@@ -106,7 +107,7 @@ export function BookingPanel({
             disabled={busy}
             onClick={() => onStatus("confirmed")}
           >
-            Tandai sudah bayar di kasir
+            Tandai DP dibayar di kasir
           </button>
         </div>
       )}

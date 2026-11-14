@@ -51,7 +51,7 @@ describe("BookingPanel", () => {
     );
 
     expect(screen.queryByRole("button", { name: "Pindahkan booking" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Tandai sudah bayar di kasir" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tandai DP dibayar di kasir" }));
     expect(changes).toEqual(["confirmed"]);
   });
 });

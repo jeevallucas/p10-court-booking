@@ -67,7 +67,7 @@ interface DragTarget {
 }
 
 const statusDone: Record<OwnerStatus, (name: string) => string> = {
-  confirmed: (name) => `${name} ditandai sudah bayar di kasir.`,
+  confirmed: (name) => `DP ${name} ditandai dibayar di kasir.`,
   cancelled: (name) => `Booking ${name} dibatalkan; slotnya kosong lagi.`,
   no_show: (name) => `${name} ditandai tidak datang.`,
 };
@@ -293,26 +293,28 @@ export function OwnerBoard() {
   const panelOpen = selection !== null;
 
   return (
-    <main className={styles.page}>
+    <main className={styles.page} data-wide-page>
       <header className={styles.toolbar}>
         <div className={styles.dayNav}>
-          <button
-            type="button"
-            className={styles.step}
-            aria-label="Hari sebelumnya"
-            onClick={() => changeDay(shiftDay(day, -1))}
-          >
-            ‹
-          </button>
-          <h1>{longDate(`${day}T12:00:00+07:00`)}</h1>
-          <button
-            type="button"
-            className={styles.step}
-            aria-label="Hari berikutnya"
-            onClick={() => changeDay(shiftDay(day, 1))}
-          >
-            ›
-          </button>
+          <div className={styles.stepper}>
+            <button
+              type="button"
+              className={styles.step}
+              aria-label="Hari sebelumnya"
+              onClick={() => changeDay(shiftDay(day, -1))}
+            >
+              ‹
+            </button>
+            <h1>{longDate(`${day}T12:00:00+07:00`)}</h1>
+            <button
+              type="button"
+              className={styles.step}
+              aria-label="Hari berikutnya"
+              onClick={() => changeDay(shiftDay(day, 1))}
+            >
+              ›
+            </button>
+          </div>
           {day !== today && (
             <button type="button" className={styles.quiet} onClick={() => changeDay(today)}>
               Hari ini

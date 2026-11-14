@@ -49,3 +49,8 @@
   color: var(--ink);
   font-weight: 600;
 }
+
+/* The owner board is wider than the player pages; the footer lines up with whichever is shown. */
+:global(body:has([data-wide-page])) .inner {
+  max-width: 100rem;
+}

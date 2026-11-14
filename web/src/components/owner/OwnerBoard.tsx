@@ -26,7 +26,7 @@ import {
   slotMinutes,
   type Placement,
 } from "@/lib/board";
-import { dayKey, longDate, timeLabel } from "@/lib/format";
+import { addDays, dayKey, longDate, timeLabel } from "@/lib/format";
 
 import { BookingPanel } from "./BookingPanel";
 import styles from "./OwnerBoard.module.css";
@@ -72,11 +72,6 @@ const statusDone: Record<OwnerStatus, (name: string) => string> = {
   no_show: (name) => `${name} ditandai tidak datang.`,
 };
 
-function shiftDay(day: string, days: number): string {
-  const [year, month, date] = day.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, date + days)).toISOString().slice(0, 10);
-}
-
 export function OwnerBoard() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -101,7 +96,8 @@ export function OwnerBoard() {
     queryKey,
     queryFn: () => fetchOwnerDay(day),
     // Players keep booking while the owner watches; pick their holds up without a reload.
-    refetchInterval: 30_000,
+    // A past day cannot change, so it is not polled.
+    refetchInterval: day >= today ? 30_000 : false,
     retry: (failures, error) =>
       !(error instanceof OwnerApiError && error.sessionEnded) && failures < 1,
   });
@@ -301,7 +297,7 @@ export function OwnerBoard() {
               type="button"
               className={styles.step}
               aria-label="Hari sebelumnya"
-              onClick={() => changeDay(shiftDay(day, -1))}
+              onClick={() => changeDay(addDays(day, -1))}
             >
               ‹
             </button>
@@ -310,7 +306,7 @@ export function OwnerBoard() {
               type="button"
               className={styles.step}
               aria-label="Hari berikutnya"
-              onClick={() => changeDay(shiftDay(day, 1))}
+              onClick={() => changeDay(addDays(day, 1))}
             >
               ›
             </button>

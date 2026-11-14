@@ -131,6 +131,7 @@ export function BookingDialog({ chosen, availability, onClose, onSlotTaken }: Pr
           Nama pemesan
           <input
             name="name"
+            maxLength={60}
             autoComplete="name"
             value={name}
             onChange={(event) => setName(event.target.value)}

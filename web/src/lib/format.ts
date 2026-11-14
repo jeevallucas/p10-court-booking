@@ -28,12 +28,16 @@ export function dayKey(moment: Date): string {
   return dayKeyFormat.format(moment);
 }
 
+/** The day `days` after a YYYY-MM-DD day key (negative for earlier days). */
+export function addDays(key: string, days: number): string {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
 /** The next `count` venue days starting today, as YYYY-MM-DD. */
 export function upcomingDays(now: Date, count: number): string[] {
-  const [year, month, day] = dayKey(now).split("-").map(Number);
-  return Array.from({ length: count }, (_, offset) =>
-    new Date(Date.UTC(year, month - 1, day + offset)).toISOString().slice(0, 10),
-  );
+  const today = dayKey(now);
+  return Array.from({ length: count }, (_, offset) => addDays(today, offset));
 }
 
 /** "19.00" */

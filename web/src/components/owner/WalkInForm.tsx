@@ -147,6 +147,7 @@ export function WalkInForm({
         Nama pelanggan
         <input
           name="name"
+          maxLength={60}
           value={name}
           onChange={(event) => setName(event.target.value)}
           aria-invalid={touched && nameError !== ""}

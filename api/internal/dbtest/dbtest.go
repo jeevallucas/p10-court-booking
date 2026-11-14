@@ -31,7 +31,7 @@ func New(t testing.TB) *pgxpool.Pool {
 	if err != nil {
 		t.Fatalf("connect to PostgreSQL at DATABASE_URL: %v", err)
 	}
-	defer admin.Close(ctx)
+	defer closeOrLog(t, "admin connection", func() error { return admin.Close(ctx) })
 
 	suffix := make([]byte, 6)
 	if _, err := rand.Read(suffix); err != nil {
@@ -47,7 +47,9 @@ func New(t testing.TB) *pgxpool.Pool {
 			t.Errorf("connect to drop test database %s: %v", name, err)
 			return
 		}
-		defer cleanup.Close(context.Background())
+		defer closeOrLog(t, "cleanup connection", func() error {
+			return cleanup.Close(context.Background())
+		})
 		if _, err := cleanup.Exec(context.Background(),
 			"drop database "+name+" with (force)"); err != nil {
 			t.Errorf("drop test database %s: %v", name, err)
@@ -64,7 +66,7 @@ func New(t testing.TB) *pgxpool.Pool {
 	config.MaxConns = 80
 
 	migrationDB := stdlib.OpenDB(*config.ConnConfig)
-	defer migrationDB.Close()
+	defer closeOrLog(t, "migration connection", migrationDB.Close)
 	if err := migrations.Up(ctx, migrationDB); err != nil {
 		t.Fatalf("migrate test database: %v", err)
 	}
@@ -90,4 +92,10 @@ func Court(t testing.TB, pool *pgxpool.Pool, sport string) pgtype.UUID {
 		t.Fatalf("insert test court: %v", err)
 	}
 	return courtID
+}
+
+func closeOrLog(t testing.TB, what string, closeFn func() error) {
+	if err := closeFn(); err != nil {
+		t.Logf("close %s: %v", what, err)
+	}
 }

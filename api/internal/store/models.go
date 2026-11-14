@@ -93,6 +93,18 @@ type Court struct {
 	SortOrder int32
 }
 
+type OutboxMessage struct {
+	ID            int64
+	Recipient     string
+	Subject       string
+	Body          string
+	CreatedAt     pgtype.Timestamptz
+	NextAttemptAt pgtype.Timestamptz
+	Attempts      int32
+	LastError     pgtype.Text
+	SentAt        pgtype.Timestamptz
+}
+
 type OwnerAccount struct {
 	ID           pgtype.UUID
 	VenueID      pgtype.UUID
@@ -106,6 +118,17 @@ type OwnerSession struct {
 	OwnerID   pgtype.UUID
 	ExpiresAt pgtype.Timestamptz
 	CreatedAt pgtype.Timestamptz
+}
+
+type PaymentNotification struct {
+	ID                int64
+	BookingID         pgtype.UUID
+	TransactionID     string
+	TransactionStatus string
+	GrossAmountIdr    int32
+	Outcome           string
+	Payload           []byte
+	ReceivedAt        pgtype.Timestamptz
 }
 
 type PriceRule struct {

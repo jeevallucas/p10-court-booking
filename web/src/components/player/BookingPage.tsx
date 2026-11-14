@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { api, type Sport } from "@/api/client";
-import { dayParts, longDate, timeLabel, upcomingDays } from "@/lib/format";
+import { dayParts, longDate, rupiah, timeLabel, upcomingDays } from "@/lib/format";
 import { problemMessage } from "@/lib/problems";
 import { hourRows, type FreeCourt } from "@/lib/slots";
 
@@ -42,7 +42,10 @@ export function BookingPage() {
     <main className={styles.page}>
       <header className={styles.header}>
         <h1>Arena Kotabaru</h1>
-        <p>Badminton dan futsal di Yogyakarta, buka 07.00–23.00 WIB</p>
+        <p>
+          Badminton dan futsal di Yogyakarta, buka{" "}
+          <span className={styles.nowrap}>07.00–23.00 WIB</span>
+        </p>
       </header>
 
       <section aria-label="Pilih tanggal" className={styles.days}>
@@ -54,11 +57,6 @@ export function BookingPage() {
               type="button"
               className={styles.day}
               aria-pressed={key === day}
-              aria-label={
-                index === 0
-                  ? `Hari ini, ${longDate(`${key}T12:00:00+07:00`)}`
-                  : longDate(`${key}T12:00:00+07:00`)
-              }
               onClick={() => setDay(key)}
             >
               <span>{index === 0 ? "Hari ini" : parts.weekday}</span>
@@ -131,11 +129,14 @@ export function BookingPage() {
                           type="button"
                           className={styles.court}
                           onClick={() => setChosen(free)}
-                          aria-label={`${free.court.name}, ${timeLabel(row.start)}, ${free.slot.priceIdr.toLocaleString("id-ID")} rupiah per jam`}
                         >
-                          <span>{free.court.name}</span>
-                          <span className={styles.price}>
-                            Rp{free.slot.priceIdr.toLocaleString("id-ID")}
+                          {/* The name is the visible text, so voice control users can say
+                              what they see; the hidden part gives the hour to screen readers. */}
+                          <span>{free.court.name}</span>{" "}
+                          <span className={styles.price}>{rupiah(free.slot.priceIdr)}</span>
+                          <span className="visually-hidden">
+                            {" "}
+                            per jam, pukul {timeLabel(row.start)}
                           </span>
                         </button>
                       </li>
@@ -166,8 +167,10 @@ function SlotSkeleton() {
       {Array.from({ length: 6 }, (_, index) => (
         <li key={index} className={`${styles.hour} ${styles.skeleton}`}>
           <span className={styles.skeletonTime} />
-          <span className={styles.skeletonCourt} />
-          <span className={styles.skeletonCourt} />
+          <span className={styles.courts}>
+            <span className={styles.skeletonCourt} />
+            <span className={styles.skeletonCourt} />
+          </span>
         </li>
       ))}
     </ol>

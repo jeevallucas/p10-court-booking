@@ -6,7 +6,7 @@
 }
 
 .inner {
-  max-width: 64rem;
+  max-width: 72rem;
   margin: 0 auto;
   padding: var(--space-4);
   display: flex;

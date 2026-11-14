@@ -1,5 +1,6 @@
+/* Wide enough for all 14 days in one row on a laptop. */
 .page {
-  max-width: 64rem;
+  max-width: 72rem;
   margin: 0 auto;
   padding: var(--space-4);
 }
@@ -192,7 +193,10 @@
 
 .skeletonCourt {
   width: 7.25rem;
-  margin-right: var(--space-2);
+}
+
+.nowrap {
+  white-space: nowrap;
 }
 
 @media (max-width: 420px) {
@@ -206,5 +210,9 @@
 
   .court {
     min-width: 6.5rem;
+  }
+
+  .skeletonCourt {
+    width: 6.5rem;
   }
 }

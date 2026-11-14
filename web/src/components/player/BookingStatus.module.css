@@ -1,5 +1,7 @@
+/* Taller than the tallest state, so the footer does not jump when the booking loads. */
 .page {
   max-width: 32rem;
+  min-height: 36rem;
   margin: 0 auto;
   padding: var(--space-4);
 }
@@ -51,9 +53,27 @@
   border-color: var(--ink-muted);
 }
 
+.venue {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-bottom: var(--space-2);
+  color: var(--ink);
+  font-size: var(--text-section);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.venue:hover {
+  text-decoration: underline;
+}
+
+.panel .when {
+  margin: var(--space-1) 0 var(--space-4);
+}
+
 .time {
   font-size: var(--text-time);
-  margin: var(--space-1) 0 var(--space-4);
 }
 
 .details {

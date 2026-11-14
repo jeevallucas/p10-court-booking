@@ -17,7 +17,9 @@ export function BookingStatus({ reference }: { reference: string }) {
       const { data, error, response } = await api.GET("/v1/bookings/{reference}", {
         params: { path: { reference } },
       });
-      if (response?.status === 404) {
+      // A mistyped code fails the API's format check (422) and can no more exist than an
+      // unknown one (404); both tell the player to check the code.
+      if (response?.status === 404 || response?.status === 422) {
         return null;
       }
       if (!data) {
@@ -31,6 +33,9 @@ export function BookingStatus({ reference }: { reference: string }) {
 
   return (
     <main className={styles.page}>
+      <Link href="/" className={styles.venue}>
+        Arena Kotabaru
+      </Link>
       {booking.isPending && <p aria-live="polite">Memuat booking {reference}…</p>}
       {booking.isError && (
         <div role="alert" className={styles.panel}>
@@ -44,7 +49,9 @@ export function BookingStatus({ reference }: { reference: string }) {
         <div className={styles.panel}>
           <h1>Booking {reference} tidak ditemukan</h1>
           <p>Periksa lagi kode booking dari pesan konfirmasi, atau pesan lapangan baru.</p>
-          <Link href="/">Lihat jam kosong</Link>
+          <Link href="/" className={styles.action}>
+            Lihat jam kosong
+          </Link>
         </div>
       )}
       {booking.data && <Summary booking={booking.data} />}
@@ -70,8 +77,11 @@ function Summary({ booking }: { booking: Booking }) {
       </p>
       <h1>{booking.courtName}</h1>
       <p>{longDate(booking.start)}</p>
-      <p className={`time ${styles.time}`}>
-        {timeLabel(booking.start)}–{timeLabel(booking.end)}
+      <p className={styles.when}>
+        <span className={`time ${styles.time}`}>
+          {timeLabel(booking.start)}–{timeLabel(booking.end)}
+        </span>{" "}
+        WIB
       </p>
       <dl className={styles.details}>
         <div>

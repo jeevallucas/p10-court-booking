@@ -1,0 +1,13 @@
+.bar {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: var(--text-small);
+  text-align: center;
+}
+
+.bar a {
+  color: inherit;
+  text-underline-offset: 2px;
+}

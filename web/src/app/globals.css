@@ -1,0 +1,93 @@
+/* Tokens from docs/design-brief.md. Colour encodes booking state only. */
+:root {
+  --ink: #16201b;
+  --ink-muted: #55605a;
+  --paper: #ffffff;
+  --shuttle: #f4f6f1;
+  --line: #c9cfc9;
+  --court-green: #14684a;
+  --amber-fill: #f6c453;
+  --amber-ink: #8a5300;
+  --walk-in: #35546e;
+  --no-show: #d5d9d6;
+  --conflict: #b42318;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius: 2px;
+
+  --text-small: 0.8125rem;
+  --text-body: 1rem;
+  --text-section: 1.25rem;
+  --text-page: 1.5625rem;
+  --text-time: 2rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--shuttle);
+  color: var(--ink);
+  font-family: var(--font-archivo), system-ui, sans-serif;
+  font-size: var(--text-body);
+  line-height: 1.4;
+}
+
+/* The scoreboard numerals: Archivo at its widest and heavy, with figures that line up. */
+.time {
+  font-stretch: 125%;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.2;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

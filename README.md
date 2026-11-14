@@ -32,16 +32,18 @@ group of ten arriving to a full court.
 ## What it does
 
 - Players see the free courts for any of the next 14 days and book in a few taps; the slot is
-  held for 10 minutes while they pay a deposit of half the price.
-- The database refuses any overlapping booking on a court, so 200 simultaneous attempts on one
-  slot leave exactly one booking.
+  held for 10 minutes while they pay a deposit of half the price, and one phone number can hold
+  two slots at a time.
+- Writes for one court take turns, and a database exclusion constraint refuses any overlapping
+  booking, so 200 simultaneous attempts on one slot leave exactly one booking.
 - Payment notifications are signed, applied once even when replayed or delivered out of order, and
   a late payment takes its slot back if it is still free.
 - The owner's board shows six courts in half-hour rows; bookings move by dragging or from a side
   panel, and a move onto another booking is refused with the name of the booking in the way.
-- The owner records walk-ins, deposits paid at the desk, no-shows and cancellations.
-- Confirmations go through a transactional outbox, so a booking is never confirmed without its
-  message being queued.
+- The owner records walk-ins, deposits paid at the desk, no-shows and cancellations, and the
+  player is told when the owner confirms, moves or cancels their booking.
+- Messages go through a transactional outbox, so a booking never changes without its message
+  being queued.
 
 ## How it works
 
@@ -92,26 +94,29 @@ The full log, including the fake payment provider and the hosting details, is in
 
 ## Results
 
-Every number below comes from a test in this repository, run as described.
+Every number below was measured; each paragraph says how.
 
 **Two hundred players, one court hour.** `load/hold-race.js` (k6) sends 200 holds for the same
 court and hour at the same moment, each from its own client address. After the court lock, eight
 runs on a laptop (Ryzen 5 7535HS, API and PostgreSQL 17 on the same machine) all ended with
 exactly 1 hold and 199 `slot_taken` refusals, no errors, and hold latency p95 between 360 and
-517 ms. Before the court lock, one of four runs hit 57 deadlocks and made some players wait up to
-56 seconds. The runs and the fix are in [docs/load-test.md](docs/load-test.md); CI repeats the
-race on every push and checks the counts, not the latency.
+517 ms. Before the court lock, one of four runs hit 57 deadlocks: 187 of the 200 requests
+failed or waited 35 seconds or more, some past k6's 60-second timeout. The runs and the fix are
+in [docs/load-test.md](docs/load-test.md); CI repeats the race on every push and checks the
+counts, not the latency.
 
 **Payments.** Replaying the same notification 10 times, in a row or concurrently, confirms the
-booking once and queues one message (`api/internal/payment`).
+booking once and queues one message. A declined card leaves the hold for a second attempt, and a
+signed failure relabelled as a payment is refused (`api/internal/payment`).
 
-**Tests.** 58 Go tests in 8 packages run against a real PostgreSQL database, among them 200
-concurrent holds through the service layer. The web app has 41 unit and component tests, and 4
+**Tests.** The API has 68 Go tests in 8 packages; all but the pricing, phone-number and
+rate-limit tests run against a real PostgreSQL database, among them 200 concurrent holds. The web app has 41 unit and component tests, and 4
 Playwright tests drive the built app against the real API: book, pay and see it confirmed; a slot
 taken by someone else; an owner's drag onto another booking refused; and a move the API refuses
 put back.
 
-**Accessibility and speed.** axe found 0 violations across 25 page and width combinations.
+**Accessibility and speed.** Measured by hand on 2026-11-14, not in CI: axe, through
+`web/scripts/capture-screens.mjs`, found 0 violations across 25 page and width combinations.
 Lighthouse 13.6 (mobile emulation, production build, localhost):
 
 | Page | Performance | Accessibility | Best practices | SEO |
@@ -128,6 +133,10 @@ Lighthouse 13.6 (mobile emulation, production build, localhost):
 - In the live demo, confirmations and the expiry sweep run only while Vercel keeps an instance
   active, and the rate limits (5 holds at once per address, then 10 a minute) reset with each
   instance. `docker compose` runs the API as a long-lived server instead.
+- The two-holds-per-phone limit trusts the number typed in: without phone verification, someone
+  inventing numbers can hold more, within the rate limit.
+- The owner's board has no table semantics: screen-reader users move through the bookings court
+  by court, each button naming its court, time and status.
 - Dragging works with a mouse; on touch screens the side panel moves bookings.
 - One venue: its opening hours (07.00 to 23.00) are copied into the board's layout.
 - Logs are structured with request IDs, but there are no metrics yet. The next step is counting

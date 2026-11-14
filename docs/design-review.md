@@ -21,7 +21,7 @@ the held status page at every width.
 | Status page | Fail | No way back to the schedule and no time zone on the time. Added the venue name as a link home and "WIB" after the time. |
 | 375 px | Fail | "07.00–23.00 WIB" broke across two lines; it no longer wraps. |
 | 1440 px | Fail | The day strip showed a sliver of the 14th day. The page is now 72rem wide so all 14 days fit on a laptop; phones still scroll the strip. |
-| Anti-slop list | Pass | No gradients except the deposit-pending stripes the design brief calls for, no shadows, no card grid, no icons beyond the two profile logos, no all-caps labels or middle-dot meta text. |
+| Generic-design checks | Pass | No gradients except the deposit-pending stripes the design brief calls for, no shadows, no card grid, no icons beyond the two profile logos, no all-caps labels or middle-dot meta text. |
 | Copy | Pass | Sentence case; buttons name the action ("Bayar DP Rp40.000", "Pilih jam lain", "Muat ulang jadwal"); errors say what failed and what to do. |
 | Keyboard | Pass | Focus ring visible on the day strip; the sheet is a native modal `dialog`, so focus stays inside and Escape closes it. |
 
@@ -86,7 +86,7 @@ brief plans for. axe ran on the login, the board, the panel and the walk-in form
 | 1366 and 1440 px | Fail | The footer kept the player pages' 72rem column while the board is 100rem wide, so their left edges did not line up. The footer now follows the wider page when the board is shown. |
 | Drag into a conflict | Pass | The landing spot turns red with "Bentrok dengan Bayu Pratama, 13.00–14.00."; on release the booking stays put and the message stays above the board. |
 | States | Pass | Each block names its state (Terkonfirmasi, Menunggu DP with stripes, Walk-in, Tidak datang struck through); empty day, load failure with retry, and loading all read correctly. |
-| Anti-slop list | Pass | Flat square blocks, colour only for state, no shadows or icons, sentence case. |
+| Generic-design checks | Pass | Flat square blocks, colour only for state, no shadows or icons, sentence case. |
 
 The first captures also exposed a hold left behind by each script run (three "Menunggu DP"
 blocks in a row); the database was reseeded before round 2.

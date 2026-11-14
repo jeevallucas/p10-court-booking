@@ -24,6 +24,8 @@ revisit it.
   own process.
 - Consequences: while the free API sleeps, no notifications go out; they are sent when it wakes.
   The demo only logs notifications, so nothing is lost.
+- Update: the demo API later moved to Vercel (entry "Run the demo API on Vercel instead of
+  Render"), where the loop runs while an instance is active; the reasoning is unchanged.
 - Revisit if: the demo moves to a paid plan.
 
 ## 2026-11-14 Reseed the demo nightly from GitHub Actions
@@ -117,8 +119,9 @@ revisit it.
 
 ## 2026-11-14 Keep the owner's session cookie first-party behind the web app's proxy
 
-- Context: the web app (Vercel) and the API (Render) are on different sites. A cookie set by
-  the API would be third-party to the web app, which browsers increasingly block.
+- Context: the web app and the API are on different sites (first planned as Vercel and Render;
+  now two Vercel projects with different domains). A cookie set by the API would be third-party
+  to the web app, which browsers increasingly block.
 - Options: (a) `SameSite=None` cookies across sites plus CORS; (b) bearer tokens in browser
   storage; (c) the web app proxies `/v1` to the API, so the cookie belongs to the web app's site.
 - Decision: (c). The cookie is `HttpOnly`, `Secure`, and `SameSite=Lax`, which also blocks
@@ -174,8 +177,11 @@ revisit it.
   endpoint, exactly as the real provider would.
 - Decision: (b). The notification still travels over HTTP and through the same validation,
   signature check, and rules as a real one.
-- Consequences: the page is reached through the web app's proxy like the API. It is mounted
-  only for the fake provider; a real provider's checkout would replace the payment link.
+- Consequences: the page is reached through the web app's proxy like the API. It is mounted in
+  every deployment, because the fake provider is the only one, and it pays or cancels only a
+  booking that is still held; anything else is sent to the status page. Anyone can open it for
+  any held booking, which is acceptable only because no money moves. A real provider's checkout
+  would replace the payment link and remove this handler.
 
 ## 2026-11-14 Seed a synthetic schedule that resets as a whole
 
@@ -200,7 +206,7 @@ revisit it.
   `GET /v1/bookings/{code}` every 3 seconds, only while the status is `held`.
 - Decision: (b). A hold lasts at most 10 minutes, so one page polls at most 200 times, and
   polling stops as soon as the booking is confirmed, expired or cancelled. It needs no
-  long-lived connections through the Vercel proxy or on the Render free instance.
+  long-lived connections through the Vercel proxy or on the free API host.
 - Revisit if: many players wait on held bookings at once, or the owner board needs live updates.
 
 ## 2026-11-14 Test web components against a fake fetch, not a mock server library
@@ -266,7 +272,9 @@ revisit it.
   forming, and writers for different courts never wait for each other. The exclusion constraint
   stays the guarantee against double booking (2026-11-14 entry above): the lock only orders the
   writers. Every writer takes the court before any booking row, so the lock order is the same
-  everywhere, and the expiry sweep skips rows that are locked instead of waiting on them.
+  everywhere, and the expiry sweep skips rows that are locked instead of waiting on them. A
+  reschedule locks both the court it leaves and the one it enters, in one fixed order, because
+  the booking's old row is still checked on its old court until the move commits.
 - Consequences: holds for one court are applied one at a time; 200 simultaneous attempts on one
   court now finish with p95 360 to 517 ms on a laptop and no errors. A new booking write must
   call LockCourt first; tests check that each existing write waits for another writer's lock.
@@ -279,8 +287,9 @@ revisit it.
   (b) Vercel Hobby for the web app, Render's free web service for the API and its worker, and
   Neon's free PostgreSQL, each in its Singapore region.
 - Decision: (b). Neon supports `btree_gist`, so the exclusion constraint works as in
-  development. The API is described in `render.yaml`, built from `api/Dockerfile`, and checked
-  at `/healthz`; the web app's server functions run in `sin1` (`web/vercel.json`).
+  development. The API was described in a `render.yaml` Blueprint, built from `api/Dockerfile`,
+  and checked at `/healthz`; the web app's server functions run in `sin1` (`web/vercel.json`).
+  The Blueprint was removed when the API moved to Vercel (next entry).
 - Consequences: Render's free service sleeps after 15 idle minutes and takes about a minute to
   wake, so the first visitor waits; the web app says so after five seconds of loading instead of
   looking broken. Neon's free compute also suspends when idle, which adds a second or two.
@@ -312,4 +321,41 @@ revisit it.
   the Hobby plan blocks deployments whose commit author (a GitHub noreply address) it cannot
   match to the account. `api/Dockerfile` and `compose.yaml` still run the long-lived server.
 - Revisit if: the demo needs the worker to run on a schedule even with no visitors.
+
+## 2026-11-14 Limit holds to two per phone and to the next 14 days
+
+- Context: a review of the demo pointed out that the rate limit only bounds requests per minute.
+  At 10 holds a minute and 10 minutes per hold, one address could keep about 100 court-hours
+  held without paying, and nothing stopped holds years ahead.
+- Options: (a) a lower rate limit, which also slows honest players; (b) a cap on live holds per
+  phone number and a booking horizon; (c) phone verification by one-time code, which needs a
+  real messaging provider (a non-goal).
+- Decision: (b). A phone may hold two slots at once (a group booking two courts), and players can
+  book today and the next 13 days, the days the date strip shows. Both answer with their own
+  problem code so the web app can say what to do.
+- Consequences: the per-phone count and the insert are separate statements, so two simultaneous
+  requests from one phone can both pass; the rate limit bounds that. Someone who invents phone
+  numbers can still hold more; phone verification would close that.
+- Revisit if: holds are abused in the demo, or the venue wants to open bookings further ahead.
+
+## 2026-11-14 Tell the player when the owner confirms, moves or cancels a booking
+
+- Context: only the payment path queued a message, so a player moved from 19.00 to 21.00 by the
+  owner was never told, and cancelling a paid booking raised no refund reminder.
+- Decision: a desk confirmation, a reschedule and an owner's cancellation each queue a message to
+  the player in the same transaction as the change; cancelling a booking whose deposit was paid
+  also queues a refund alert to the owner. The texts live in `internal/notify`, shared with the
+  payment path. Walk-ins without a phone number get no message.
+- Revisit if: players need to choose how they are told (WhatsApp, email).
+
+## 2026-11-14 Treat a declined card as retryable, and require code 200 for a payment
+
+- Context: a "deny" released the hold, so a player whose first card was declined lost the slot
+  and their successful second attempt became a refund. Separately, the Midtrans signature covers
+  `status_code` but not `transaction_status`.
+- Decision: "deny" leaves the hold in place until it expires or another status arrives; "cancel",
+  "expire" and "failure" still release it. A notification that says "settlement" or "capture"
+  must carry status code 200, as Midtrans sends with payments, or it is refused as unsigned.
+- Consequences: tests cover deny-then-settlement and a signed failure relabelled as a payment.
+- Revisit if: a real provider is connected; then also confirm settlements through its status API.
 

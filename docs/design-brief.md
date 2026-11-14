@@ -33,7 +33,6 @@ board should read like the scoreboard on the hall wall, not like a game.
 - Archivo, one family, using its width axis as the expressive device. Times on the board and on
   slot buttons are set wide and heavy (width 125, weight 700, tabular figures), like the digits on
   a hall scoreboard. Names, labels, and body text use normal width (100), weight 400 and 600.
-- No other project in this portfolio uses Archivo.
 - Scale (ratio about 1.25): 13 px small labels, 16 px body, 20 px section titles, 25 px page title,
   32 px wide times on the player's slot buttons. Line height 1.4 for body, 1.1 for times.
 - Sentence case everywhere; no all-caps labels.
@@ -90,18 +89,18 @@ quiet: square-cornered blocks (2 px radius), no shadows, white court-line rules 
 - ALL-CAPS labels, middle-dot metadata, arrows on every link.
 - Animations on every block; motion only when a booking is moved or confirmed.
 
-## Author credit
+## Credits on the pages
 The player pages and the owner board carry a slim footer: "© 2026 Putu Jeevallucas Jnanamaitriya
 Surya Gautama", the GitHub and LinkedIn logos, and "Arena Kotabaru adalah venue fiktif" (a
 fictional venue). The demo's landing page has the byline.
 
-## Review against the frontend-design process
+## Alternatives considered
 - The obvious plan was a SaaS calendar: rounded pastel cards with shadows, a colour per court.
   Changed: colour encodes booking state only, blocks are flat and square, and courts are told
   apart by their column, not their colour.
 - The obvious sporty choice was a bright green with a neon accent on a dark background (a
-  generated-design default). Changed: a light shuttle-white board with a deep court green, because
-  the owner reads it for hours at a front desk in daylight.
+  default look of many sports apps). Changed: a light shuttle-white board with a deep court
+  green, because the owner reads it for hours at a front desk in daylight.
 - The obvious type pairing was a display face plus a neutral sans. Changed: one family, with
   Archivo's width axis doing the work, because the scoreboard numerals are the thing worth
   remembering and everything else should stay out of the way.

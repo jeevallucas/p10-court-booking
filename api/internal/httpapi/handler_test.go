@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"github.com/jeevallucas/p10-court-booking/api/internal/dbtest"
 	"github.com/jeevallucas/p10-court-booking/api/internal/httpapi"
 	"github.com/jeevallucas/p10-court-booking/api/internal/owner"
+	"github.com/jeevallucas/p10-court-booking/api/internal/payment"
 	"github.com/jeevallucas/p10-court-booking/api/internal/ratelimit"
 )
 
@@ -26,6 +28,7 @@ const (
 	ownerEmail    = "pemilik@arenakotabaru.test"
 	ownerPassword = "lapangan-enam-2026"
 	testDay       = "2026-11-20"
+	serverKey     = "test-server-key"
 )
 
 var wib = func() *time.Location {
@@ -65,12 +68,15 @@ func newAPI(t *testing.T, holdLimiter *ratelimit.Limiter) testAPI {
 	}
 	clock := at(10, 0)
 	handler, err := httpapi.NewHandler(httpapi.Config{
-		Bookings:      &booking.Service{Pool: pool, Now: func() time.Time { return clock }},
-		Sessions:      &owner.Sessions{Pool: pool, Lifetime: time.Hour},
-		Logger:        slog.New(slog.NewJSONHandler(io.Discard, nil)),
-		SecureCookies: false,
-		HoldLimiter:   holdLimiter,
-		LoginLimiter:  ratelimit.New(1000, 1000),
+		Bookings: &booking.Service{Pool: pool, Now: func() time.Time { return clock }},
+		Sessions: &owner.Sessions{Pool: pool, Lifetime: time.Hour},
+		Payments: &payment.Processor{Pool: pool, ServerKey: serverKey,
+			OwnerEmail: ownerEmail},
+		PaymentPageURL: "http://web.test/fakepay/",
+		Logger:         slog.New(slog.NewJSONHandler(io.Discard, nil)),
+		SecureCookies:  false,
+		HoldLimiter:    holdLimiter,
+		LoginLimiter:   ratelimit.New(1000, 1000),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -286,4 +292,67 @@ func TestEveryResponseCarriesARequestID(t *testing.T) {
 	if len(resp.Header.Get("X-Request-ID")) != 16 {
 		t.Fatalf("X-Request-ID %q", resp.Header.Get("X-Request-ID"))
 	}
+}
+
+func notification(reference, status string, amount int, key string) map[string]any {
+	statusCode := "200"
+	if status != "settlement" {
+		statusCode = "202"
+	}
+	gross := fmt.Sprintf("%d.00", amount)
+	return map[string]any{
+		"order_id": reference, "transaction_id": "trx-" + reference, "transaction_status": status,
+		"status_code": statusCode, "gross_amount": gross, "payment_type": "qris",
+		"signature_key": payment.Signature(reference, statusCode, gross, key),
+	}
+}
+
+func TestAHoldLinksToItsPaymentPage(t *testing.T) {
+	api := newAPI(t, nil)
+	resp, held := api.do(t, http.MethodPost, "/v1/holds",
+		holdBody(court(api.venue.Badminton[0].Bytes), at(19, 0), 1))
+	expect(t, resp, held, http.StatusCreated, "")
+	if held["paymentUrl"] != "http://web.test/fakepay/"+held["reference"].(string) {
+		t.Fatalf("paymentUrl %v", held["paymentUrl"])
+	}
+}
+
+func TestPaymentNotificationsAreVerifiedAndAppliedOnce(t *testing.T) {
+	api := newAPI(t, nil)
+	resp, held := api.do(t, http.MethodPost, "/v1/holds",
+		holdBody(court(api.venue.Badminton[0].Bytes), at(19, 0), 1))
+	expect(t, resp, held, http.StatusCreated, "")
+	reference := held["reference"].(string)
+	paid := notification(reference, "settlement", 40000, serverKey)
+
+	resp, body := api.do(t, http.MethodPost, "/v1/payments/notifications", paid)
+	expect(t, resp, body, http.StatusOK, "")
+	if body["outcome"] != "confirmed" {
+		t.Fatalf("first delivery: %v", body)
+	}
+	resp, body = api.do(t, http.MethodPost, "/v1/payments/notifications", paid)
+	if resp.StatusCode != http.StatusOK || body["outcome"] != "duplicate" {
+		t.Fatalf("replay: %d %v", resp.StatusCode, body)
+	}
+	_, body = api.do(t, http.MethodGet, "/v1/bookings/"+reference, nil)
+	if body["status"] != "confirmed" || body["paymentUrl"] != nil {
+		t.Fatalf("booking after payment: %v", body)
+	}
+
+	resp, body = api.do(t, http.MethodPost, "/v1/payments/notifications",
+		notification(reference, "settlement", 40000, "a-guessed-key"))
+	expect(t, resp, body, http.StatusForbidden, "invalid_signature")
+
+	resp, body = api.do(t, http.MethodPost, "/v1/payments/notifications",
+		notification("NOTABOOK", "settlement", 40000, serverKey))
+	expect(t, resp, body, http.StatusNotFound, "not_found")
+
+	resp, body = api.do(t, http.MethodPost, "/v1/payments/notifications",
+		notification(reference, "settlement", 1000, serverKey))
+	expect(t, resp, body, http.StatusUnprocessableEntity, "amount_mismatch")
+
+	incomplete := notification(reference, "settlement", 40000, serverKey)
+	delete(incomplete, "signature_key")
+	resp, body = api.do(t, http.MethodPost, "/v1/payments/notifications", incomplete)
+	expect(t, resp, body, http.StatusUnprocessableEntity, "invalid_request")
 }

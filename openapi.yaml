@@ -65,6 +65,29 @@ paths:
               schema: {$ref: '#/components/schemas/Booking'}
         '404': {$ref: '#/components/responses/Problem'}
 
+  /v1/payments/notifications:
+    post:
+      operationId: receivePaymentNotification
+      summary: The payment provider reports a deposit transaction change
+      description: |
+        Follows Midtrans's HTTP notification contract. The signature is
+        SHA512(order_id + status_code + gross_amount + server_key). The same notification may
+        arrive many times and out of order; each transaction status is applied once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PaymentNotification'}
+      responses:
+        '200':
+          description: Recorded; outcome says what it changed.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationReceipt'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+
   /v1/owner/session:
     post:
       operationId: logIn
@@ -220,7 +243,8 @@ components:
           type: string
           description: Stable machine-readable reason; the web app shows its own message.
           enum: [slot_taken, invalid_request, not_found, rate_limited, unauthorized,
-            invalid_transition, outside_opening_hours, in_the_past]
+            invalid_transition, outside_opening_hours, in_the_past, invalid_signature,
+            amount_mismatch]
         detail:
           type: string
 
@@ -281,6 +305,10 @@ components:
         priceIdr: {type: integer}
         depositIdr: {type: integer}
         holdExpiresAt: {type: string, format: date-time, nullable: true}
+        paymentUrl:
+          type: string
+          nullable: true
+          description: Where the player pays the deposit; present while the booking is held.
 
     OwnerBooking:
       allOf:
@@ -304,6 +332,28 @@ components:
         bookings:
           type: array
           items: {$ref: '#/components/schemas/OwnerBooking'}
+
+    PaymentNotification:
+      type: object
+      additionalProperties: true
+      required: [order_id, transaction_id, transaction_status, status_code, gross_amount,
+        signature_key]
+      properties:
+        order_id: {type: string}
+        transaction_id: {type: string}
+        transaction_status: {type: string}
+        status_code: {type: string}
+        gross_amount: {type: string}
+        signature_key: {type: string}
+        fraud_status: {type: string}
+
+    NotificationReceipt:
+      type: object
+      required: [outcome]
+      properties:
+        outcome:
+          type: string
+          enum: [confirmed, released, ignored, refund_needed, duplicate]
 
     LoginRequest:
       type: object

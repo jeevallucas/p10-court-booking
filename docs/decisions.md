@@ -138,3 +138,41 @@ revisit it.
 - Consequences: limits reset when the API restarts, and several instances would each allow
   the full rate.
 - Revisit if: the API runs on more than one instance.
+
+## 2026-11-14 Apply payment notifications once, under a lock on the booking
+
+- Context: payment providers retry notifications until they get a 200, may send several for one
+  transaction (pending, then settlement), and do not promise the order they arrive in.
+- Options: (a) apply every notification as it comes; (b) remember processed notifications by
+  (transaction ID, status) and apply each once, serialising notifications for one booking with
+  `SELECT ... FOR UPDATE`; (c) a queue between the endpoint and the rules.
+- Decision: (b). The unique key turns a replay into a rolled-back transaction that changes
+  nothing, and the row lock means two copies arriving together are applied one after the other.
+  Settlement is final: a cancel or expire that arrives afterwards is recorded and ignored.
+- Consequences: replaying one notification 10 times, one after another or concurrently,
+  confirms once and queues one message (tests in `internal/payment`).
+- Revisit if: the provider starts sending refunds that should change bookings automatically,
+  which is a non-goal today.
+
+## 2026-11-14 Take back an expired hold when its payment arrives late, or ask for a refund
+
+- Context: a player can finish paying seconds after the ten-minute hold ran out. By then the
+  slot may already belong to someone else.
+- Options: (a) always refuse late payments; (b) confirm if the slot is still free, otherwise
+  record "refund needed" and alert the owner.
+- Decision: (b). Confirming inside a savepoint lets the exclusion constraint decide: if it
+  refuses, the transaction continues, the booking stays expired, and the outbox tells the owner
+  to return the deposit. Refunds stay manual, as the brief's non-goals say.
+- Revisit if: refunds become automatic.
+
+## 2026-11-14 Serve the fake payment page from the API process
+
+- Context: the fake provider needs the server key to sign notifications, so it cannot run in
+  the browser, and the free demo host gives one web service.
+- Options: (a) a separate fake-provider service; (b) a small `/fakepay/{reference}` handler in
+  the API binary that posts its signed notification over HTTP to the API's own notification
+  endpoint, exactly as the real provider would.
+- Decision: (b). The notification still travels over HTTP and through the same validation,
+  signature check, and rules as a real one.
+- Consequences: the page is reached through the web app's proxy like the API. It is mounted
+  only for the fake provider; a real provider's checkout would replace the payment link.

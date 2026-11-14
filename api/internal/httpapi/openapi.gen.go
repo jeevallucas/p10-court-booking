@@ -54,10 +54,39 @@ func (e BookingStatus) Valid() bool {
 	}
 }
 
+// Defines values for NotificationReceiptOutcome.
+const (
+	NotificationReceiptOutcomeConfirmed    NotificationReceiptOutcome = "confirmed"
+	NotificationReceiptOutcomeDuplicate    NotificationReceiptOutcome = "duplicate"
+	NotificationReceiptOutcomeIgnored      NotificationReceiptOutcome = "ignored"
+	NotificationReceiptOutcomeRefundNeeded NotificationReceiptOutcome = "refund_needed"
+	NotificationReceiptOutcomeReleased     NotificationReceiptOutcome = "released"
+)
+
+// Valid indicates whether the value is a known member of the NotificationReceiptOutcome enum.
+func (e NotificationReceiptOutcome) Valid() bool {
+	switch e {
+	case NotificationReceiptOutcomeConfirmed:
+		return true
+	case NotificationReceiptOutcomeDuplicate:
+		return true
+	case NotificationReceiptOutcomeIgnored:
+		return true
+	case NotificationReceiptOutcomeRefundNeeded:
+		return true
+	case NotificationReceiptOutcomeReleased:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProblemCode.
 const (
+	AmountMismatch      ProblemCode = "amount_mismatch"
 	InThePast           ProblemCode = "in_the_past"
 	InvalidRequest      ProblemCode = "invalid_request"
+	InvalidSignature    ProblemCode = "invalid_signature"
 	InvalidTransition   ProblemCode = "invalid_transition"
 	NotFound            ProblemCode = "not_found"
 	OutsideOpeningHours ProblemCode = "outside_opening_hours"
@@ -69,9 +98,13 @@ const (
 // Valid indicates whether the value is a known member of the ProblemCode enum.
 func (e ProblemCode) Valid() bool {
 	switch e {
+	case AmountMismatch:
+		return true
 	case InThePast:
 		return true
 	case InvalidRequest:
+		return true
+	case InvalidSignature:
 		return true
 	case InvalidTransition:
 		return true
@@ -139,15 +172,18 @@ type Availability struct {
 
 // Booking defines model for Booking.
 type Booking struct {
-	CourtName     string        `json:"courtName"`
-	DepositIdr    int           `json:"depositIdr"`
-	End           time.Time     `json:"end"`
-	HoldExpiresAt *time.Time    `json:"holdExpiresAt,omitempty"`
-	PriceIdr      int           `json:"priceIdr"`
-	Reference     string        `json:"reference"`
-	Sport         Sport         `json:"sport"`
-	Start         time.Time     `json:"start"`
-	Status        BookingStatus `json:"status"`
+	CourtName     string     `json:"courtName"`
+	DepositIdr    int        `json:"depositIdr"`
+	End           time.Time  `json:"end"`
+	HoldExpiresAt *time.Time `json:"holdExpiresAt,omitempty"`
+
+	// PaymentUrl Where the player pays the deposit; present while the booking is held.
+	PaymentUrl *string       `json:"paymentUrl,omitempty"`
+	PriceIdr   int           `json:"priceIdr"`
+	Reference  string        `json:"reference"`
+	Sport      Sport         `json:"sport"`
+	Start      time.Time     `json:"start"`
+	Status     BookingStatus `json:"status"`
 }
 
 // BookingStatus defines model for BookingStatus.
@@ -177,6 +213,14 @@ type LoginRequest struct {
 	Password string              `json:"password"`
 }
 
+// NotificationReceipt defines model for NotificationReceipt.
+type NotificationReceipt struct {
+	Outcome NotificationReceiptOutcome `json:"outcome"`
+}
+
+// NotificationReceiptOutcome defines model for NotificationReceipt.Outcome.
+type NotificationReceiptOutcome string
+
 // OwnerBooking defines model for OwnerBooking.
 type OwnerBooking struct {
 	CourtId       openapi_types.UUID `json:"courtId"`
@@ -187,11 +231,14 @@ type OwnerBooking struct {
 	End           time.Time          `json:"end"`
 	HoldExpiresAt *time.Time         `json:"holdExpiresAt,omitempty"`
 	Id            openapi_types.UUID `json:"id"`
-	PriceIdr      int                `json:"priceIdr"`
-	Reference     string             `json:"reference"`
-	Sport         Sport              `json:"sport"`
-	Start         time.Time          `json:"start"`
-	Status        BookingStatus      `json:"status"`
+
+	// PaymentUrl Where the player pays the deposit; present while the booking is held.
+	PaymentUrl *string       `json:"paymentUrl,omitempty"`
+	PriceIdr   int           `json:"priceIdr"`
+	Reference  string        `json:"reference"`
+	Sport      Sport         `json:"sport"`
+	Start      time.Time     `json:"start"`
+	Status     BookingStatus `json:"status"`
 }
 
 // OwnerDay defines model for OwnerDay.
@@ -199,6 +246,18 @@ type OwnerDay struct {
 	Bookings []OwnerBooking     `json:"bookings"`
 	Courts   []Court            `json:"courts"`
 	Date     openapi_types.Date `json:"date"`
+}
+
+// PaymentNotification defines model for PaymentNotification.
+type PaymentNotification struct {
+	FraudStatus          *string                `json:"fraud_status,omitempty"`
+	GrossAmount          string                 `json:"gross_amount"`
+	OrderId              string                 `json:"order_id"`
+	SignatureKey         string                 `json:"signature_key"`
+	StatusCode           string                 `json:"status_code"`
+	TransactionId        string                 `json:"transaction_id"`
+	TransactionStatus    string                 `json:"transaction_status"`
+	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
 // Problem defines model for Problem.
@@ -280,6 +339,155 @@ type LogInJSONRequestBody = LoginRequest
 // CreateWalkInJSONRequestBody defines body for CreateWalkIn for application/json ContentType.
 type CreateWalkInJSONRequestBody = WalkInRequest
 
+// ReceivePaymentNotificationJSONRequestBody defines body for ReceivePaymentNotification for application/json ContentType.
+type ReceivePaymentNotificationJSONRequestBody = PaymentNotification
+
+// Getter for additional properties for PaymentNotification. Returns the specified
+// element and whether it was found
+func (a PaymentNotification) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for PaymentNotification
+func (a *PaymentNotification) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for PaymentNotification to handle AdditionalProperties
+func (a *PaymentNotification) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["fraud_status"]; found {
+		err = json.Unmarshal(raw, &a.FraudStatus)
+		if err != nil {
+			return fmt.Errorf("error reading 'fraud_status': %w", err)
+		}
+		delete(object, "fraud_status")
+	}
+
+	if raw, found := object["gross_amount"]; found {
+		err = json.Unmarshal(raw, &a.GrossAmount)
+		if err != nil {
+			return fmt.Errorf("error reading 'gross_amount': %w", err)
+		}
+		delete(object, "gross_amount")
+	}
+
+	if raw, found := object["order_id"]; found {
+		err = json.Unmarshal(raw, &a.OrderId)
+		if err != nil {
+			return fmt.Errorf("error reading 'order_id': %w", err)
+		}
+		delete(object, "order_id")
+	}
+
+	if raw, found := object["signature_key"]; found {
+		err = json.Unmarshal(raw, &a.SignatureKey)
+		if err != nil {
+			return fmt.Errorf("error reading 'signature_key': %w", err)
+		}
+		delete(object, "signature_key")
+	}
+
+	if raw, found := object["status_code"]; found {
+		err = json.Unmarshal(raw, &a.StatusCode)
+		if err != nil {
+			return fmt.Errorf("error reading 'status_code': %w", err)
+		}
+		delete(object, "status_code")
+	}
+
+	if raw, found := object["transaction_id"]; found {
+		err = json.Unmarshal(raw, &a.TransactionId)
+		if err != nil {
+			return fmt.Errorf("error reading 'transaction_id': %w", err)
+		}
+		delete(object, "transaction_id")
+	}
+
+	if raw, found := object["transaction_status"]; found {
+		err = json.Unmarshal(raw, &a.TransactionStatus)
+		if err != nil {
+			return fmt.Errorf("error reading 'transaction_status': %w", err)
+		}
+		delete(object, "transaction_status")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for PaymentNotification to handle AdditionalProperties
+func (a PaymentNotification) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.FraudStatus != nil {
+		object["fraud_status"], err = json.Marshal(a.FraudStatus)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'fraud_status': %w", err)
+		}
+	}
+
+	object["gross_amount"], err = json.Marshal(a.GrossAmount)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'gross_amount': %w", err)
+	}
+
+	object["order_id"], err = json.Marshal(a.OrderId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'order_id': %w", err)
+	}
+
+	object["signature_key"], err = json.Marshal(a.SignatureKey)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'signature_key': %w", err)
+	}
+
+	object["status_code"], err = json.Marshal(a.StatusCode)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'status_code': %w", err)
+	}
+
+	object["transaction_id"], err = json.Marshal(a.TransactionId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'transaction_id': %w", err)
+	}
+
+	object["transaction_status"], err = json.Marshal(a.TransactionStatus)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'transaction_status': %w", err)
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// GetAvailability Free and taken slots for one sport on one day
@@ -309,6 +517,9 @@ type ServerInterface interface {
 	// CreateWalkIn Book a court for a customer at the desk
 	// (POST /v1/owner/walk-ins)
 	CreateWalkIn(w http.ResponseWriter, r *http.Request)
+	// ReceivePaymentNotification The payment provider reports a deposit transaction change
+	// (POST /v1/payments/notifications)
+	ReceivePaymentNotification(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -533,6 +744,20 @@ func (siw *ServerInterfaceWrapper) CreateWalkIn(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ReceivePaymentNotification operation middleware
+func (siw *ServerInterfaceWrapper) ReceivePaymentNotification(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReceivePaymentNotification(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -656,6 +881,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/availability", wrapper.GetAvailability)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/holds", wrapper.PlaceHold)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/bookings/{reference}", wrapper.GetBooking)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/payments/notifications", wrapper.ReceivePaymentNotification)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/owner/session", wrapper.LogOut)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/owner/session", wrapper.LogIn)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/owner/bookings", wrapper.ListOwnerBookings)
@@ -1137,6 +1363,70 @@ func (response CreateWalkIn422JSONResponse) VisitCreateWalkInResponse(w http.Res
 	return err
 }
 
+type ReceivePaymentNotificationRequestObject struct {
+	Body *ReceivePaymentNotificationJSONRequestBody
+}
+
+type ReceivePaymentNotificationResponseObject interface {
+	VisitReceivePaymentNotificationResponse(w http.ResponseWriter) error
+}
+
+type ReceivePaymentNotification200JSONResponse NotificationReceipt
+
+func (response ReceivePaymentNotification200JSONResponse) VisitReceivePaymentNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceivePaymentNotification403JSONResponse struct{ ProblemJSONResponse }
+
+func (response ReceivePaymentNotification403JSONResponse) VisitReceivePaymentNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceivePaymentNotification404JSONResponse Problem
+
+func (response ReceivePaymentNotification404JSONResponse) VisitReceivePaymentNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceivePaymentNotification422JSONResponse Problem
+
+func (response ReceivePaymentNotification422JSONResponse) VisitReceivePaymentNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// GetAvailability Free and taken slots for one sport on one day
@@ -1166,6 +1456,9 @@ type StrictServerInterface interface {
 	// CreateWalkIn Book a court for a customer at the desk
 	// (POST /v1/owner/walk-ins)
 	CreateWalkIn(ctx context.Context, request CreateWalkInRequestObject) (CreateWalkInResponseObject, error)
+	// ReceivePaymentNotification The payment provider reports a deposit transaction change
+	// (POST /v1/payments/notifications)
+	ReceivePaymentNotification(ctx context.Context, request ReceivePaymentNotificationRequestObject) (ReceivePaymentNotificationResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -1468,46 +1761,84 @@ func (sh *strictHandler) CreateWalkIn(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ReceivePaymentNotification operation middleware
+func (sh *strictHandler) ReceivePaymentNotification(w http.ResponseWriter, r *http.Request) {
+	var request ReceivePaymentNotificationRequestObject
+
+	var body ReceivePaymentNotificationJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReceivePaymentNotification(ctx, request.(ReceivePaymentNotificationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReceivePaymentNotification")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReceivePaymentNotificationResponseObject); ok {
+		if err := validResponse.VisitReceivePaymentNotificationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"bOgO8v87AA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

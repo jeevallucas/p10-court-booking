@@ -21,15 +21,19 @@ import (
 
 	"github.com/jeevallucas/p10-court-booking/api/internal/booking"
 	"github.com/jeevallucas/p10-court-booking/api/internal/owner"
+	"github.com/jeevallucas/p10-court-booking/api/internal/payment"
 	"github.com/jeevallucas/p10-court-booking/api/internal/ratelimit"
 )
 
 // Config wires the HTTP layer to the booking rules and owner sessions.
 type Config struct {
-	Bookings      *booking.Service
-	Sessions      *owner.Sessions
-	Logger        *slog.Logger
-	SecureCookies bool
+	Bookings *booking.Service
+	Sessions *owner.Sessions
+	Payments *payment.Processor
+	Logger   *slog.Logger
+	// PaymentPageURL is the base of the deposit page, ending in "/"; the reference is appended.
+	PaymentPageURL string
+	SecureCookies  bool
 	// TrustedProxyHops is how many proxies in front of the API append to X-Forwarded-For;
 	// the client address is the entry that many places from the right. 0 uses the TCP peer.
 	TrustedProxyHops int
@@ -48,7 +52,13 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	}
 	spec.Servers = nil
 
-	srv := &server{bookings: cfg.Bookings, sessions: cfg.Sessions, secureCookies: cfg.SecureCookies}
+	srv := &server{
+		bookings:       cfg.Bookings,
+		sessions:       cfg.Sessions,
+		payments:       cfg.Payments,
+		secureCookies:  cfg.SecureCookies,
+		paymentPageURL: cfg.PaymentPageURL,
+	}
 	// Strict middleware receives the generated handler name, e.g. "PlaceHold".
 	limits := map[string]*ratelimit.Limiter{"PlaceHold": cfg.HoldLimiter, "LogIn": cfg.LoginLimiter}
 	strict := NewStrictHandlerWithOptions(srv,

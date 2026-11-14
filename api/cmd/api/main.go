@@ -19,9 +19,12 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/jeevallucas/p10-court-booking/api/internal/booking"
+	"github.com/jeevallucas/p10-court-booking/api/internal/fakepay"
 	"github.com/jeevallucas/p10-court-booking/api/internal/httpapi"
 	"github.com/jeevallucas/p10-court-booking/api/internal/migrations"
+	"github.com/jeevallucas/p10-court-booking/api/internal/outbox"
 	"github.com/jeevallucas/p10-court-booking/api/internal/owner"
+	"github.com/jeevallucas/p10-court-booking/api/internal/payment"
 	"github.com/jeevallucas/p10-court-booking/api/internal/ratelimit"
 )
 
@@ -50,6 +53,18 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		return fmt.Errorf("TRUSTED_PROXY_HOPS must be a whole number of proxies, got %q",
 			os.Getenv("TRUSTED_PROXY_HOPS"))
 	}
+	serverKey := os.Getenv("PAYMENT_SERVER_KEY")
+	if serverKey == "" {
+		return errors.New("PAYMENT_SERVER_KEY is not set; it signs and checks payment notifications")
+	}
+	// The browser reaches the API and the fake payment page through the web app's proxy.
+	webURL := envOr("PUBLIC_WEB_URL", "http://localhost:3000")
+	notificationURL := envOr("NOTIFICATION_URL", "http://127.0.0.1:"+port+"/v1/payments/notifications")
+	ownerEmail := envOr("OWNER_ALERT_EMAIL", "pemilik@arenakotabaru.test")
+	var sender outbox.Sender = outbox.LogSender{Logger: logger}
+	if smtpAddr := os.Getenv("SMTP_ADDR"); smtpAddr != "" {
+		sender = outbox.SMTPSender{Addr: smtpAddr, From: "booking@arenakotabaru.test"}
+	}
 
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
@@ -66,9 +81,11 @@ func run(ctx context.Context, logger *slog.Logger) error {
 
 	bookings := &booking.Service{Pool: pool, Now: time.Now}
 	sessions := &owner.Sessions{Pool: pool, Lifetime: 12 * time.Hour}
-	handler, err := httpapi.NewHandler(httpapi.Config{
+	api, err := httpapi.NewHandler(httpapi.Config{
 		Bookings:         bookings,
 		Sessions:         sessions,
+		Payments:         &payment.Processor{Pool: pool, ServerKey: serverKey, OwnerEmail: ownerEmail},
+		PaymentPageURL:   webURL + "/fakepay/",
 		Logger:           logger,
 		SecureCookies:    secureCookies,
 		TrustedProxyHops: trustedHops,
@@ -78,7 +95,23 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	handler := http.NewServeMux()
+	handler.Handle("/", api)
+	handler.Handle("/fakepay/", fakepay.Handler(fakepay.Config{
+		Bookings:        bookings,
+		ServerKey:       serverKey,
+		NotificationURL: notificationURL,
+		ReturnURL:       webURL + "/booking/",
+		Client:          &http.Client{Timeout: 10 * time.Second},
+		Logger:          logger,
+	}))
 
+	worker := &outbox.Worker{Pool: pool, Sender: sender, BatchSize: 20, Logger: logger}
+	go every(ctx, 2*time.Second, func() {
+		if _, err := worker.RunOnce(ctx); err != nil {
+			logger.Error("send outbox messages", "error", err)
+		}
+	})
 	go every(ctx, 30*time.Second, func() {
 		if expired, err := bookings.ExpireHolds(ctx); err != nil {
 			logger.Error("expire holds", "error", err)

@@ -37,8 +37,8 @@ func slotText(start, end time.Time) string {
 		months[start.Month()-1], start.Year(), start.Format("15.04"), end.Format("15.04"))
 }
 
-// rupiah renders 40000 as "Rp40.000".
-func rupiah(amount int32) string {
+// Rupiah renders 40000 as "Rp40.000".
+func Rupiah(amount int32) string {
 	digits := fmt.Sprint(amount)
 	var groups []string
 	for len(digits) > 3 {
@@ -56,7 +56,7 @@ func confirmationMessage(v booking.View) message {
 		body: fmt.Sprintf("Halo %s, booking %s pada %s sudah terkonfirmasi. DP %s diterima; "+
 			"sisa %s dibayar di kasir. Kode booking: %s.",
 			v.CustomerName, v.CourtName, slotText(v.Period.Lower.Time, v.Period.Upper.Time),
-			rupiah(v.DepositIdr), rupiah(v.PriceIdr-v.DepositIdr), v.Reference),
+			Rupiah(v.DepositIdr), Rupiah(v.PriceIdr-v.DepositIdr), v.Reference),
 	}
 }
 
@@ -66,7 +66,7 @@ func refundAlert(ownerEmail string, v booking.View) message {
 		subject:   "DP perlu dikembalikan: " + v.Reference,
 		body: fmt.Sprintf("DP %s dari %s (%s) masuk untuk %s pada %s, tetapi slot itu sudah "+
 			"tidak tersedia (status booking: %s). Kembalikan DP ke pemain.",
-			rupiah(v.DepositIdr), v.CustomerName, v.CustomerPhone, v.CourtName,
+			Rupiah(v.DepositIdr), v.CustomerName, v.CustomerPhone, v.CourtName,
 			slotText(v.Period.Lower.Time, v.Period.Upper.Time), v.Status),
 	}
 }

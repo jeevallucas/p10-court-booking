@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/jeevallucas/p10-court-booking/api/internal/booking"
 	"github.com/jeevallucas/p10-court-booking/api/internal/owner"
+	"github.com/jeevallucas/p10-court-booking/api/internal/payment"
 	"github.com/jeevallucas/p10-court-booking/api/internal/store"
 )
 
@@ -21,7 +23,10 @@ const SessionCookie = "court_session"
 type server struct {
 	bookings      *booking.Service
 	sessions      *owner.Sessions
+	payments      *payment.Processor
 	secureCookies bool
+	// paymentPageURL is the base of the deposit payment page; the reference is appended.
+	paymentPageURL string
 }
 
 var _ StrictServerInterface = (*server)(nil)
@@ -85,7 +90,7 @@ func (s *server) PlaceHold(ctx context.Context, req PlaceHoldRequestObject) (Pla
 		CustomerPhone: req.Body.CustomerPhone,
 	})
 	if err == nil {
-		return PlaceHold201JSONResponse(bookingJSON(held)), nil
+		return PlaceHold201JSONResponse(s.bookingJSON(held)), nil
 	}
 	p, ok := problemFor(err)
 	switch {
@@ -106,7 +111,38 @@ func (s *server) GetBooking(ctx context.Context, req GetBookingRequestObject) (G
 	if err != nil {
 		return nil, err
 	}
-	return GetBooking200JSONResponse(bookingJSON(view)), nil
+	return GetBooking200JSONResponse(s.bookingJSON(view)), nil
+}
+
+func (s *server) ReceivePaymentNotification(ctx context.Context, req ReceivePaymentNotificationRequestObject) (ReceivePaymentNotificationResponseObject, error) {
+	body := req.Body
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	notification := payment.Notification{
+		OrderID:           body.OrderId,
+		TransactionID:     body.TransactionId,
+		TransactionStatus: body.TransactionStatus,
+		StatusCode:        body.StatusCode,
+		GrossAmount:       body.GrossAmount,
+		SignatureKey:      body.SignatureKey,
+	}
+	if body.FraudStatus != nil {
+		notification.FraudStatus = *body.FraudStatus
+	}
+	outcome, err := s.payments.Apply(ctx, notification, payload)
+	switch {
+	case errors.Is(err, payment.ErrInvalidSignature):
+		return ReceivePaymentNotification403JSONResponse{problem(InvalidSignature, err.Error())}, nil
+	case errors.Is(err, payment.ErrUnknownOrder):
+		return ReceivePaymentNotification404JSONResponse(problem(NotFound, err.Error())), nil
+	case errors.Is(err, payment.ErrAmountMismatch):
+		return ReceivePaymentNotification422JSONResponse(problem(AmountMismatch, err.Error())), nil
+	case err != nil:
+		return nil, err
+	}
+	return ReceivePaymentNotification200JSONResponse{Outcome: NotificationReceiptOutcome(outcome)}, nil
 }
 
 func (s *server) LogIn(ctx context.Context, req LogInRequestObject) (LogInResponseObject, error) {
@@ -158,7 +194,7 @@ func (s *server) ListOwnerBookings(ctx context.Context, req ListOwnerBookingsReq
 		response.Courts = append(response.Courts, courtJSON(c))
 	}
 	for _, v := range views {
-		response.Bookings = append(response.Bookings, ownerBookingJSON(v))
+		response.Bookings = append(response.Bookings, s.ownerBookingJSON(v))
 	}
 	return response, nil
 }
@@ -176,7 +212,7 @@ func (s *server) CreateWalkIn(ctx context.Context, req CreateWalkInRequestObject
 		CustomerPhone: phone,
 	})
 	if err == nil {
-		return CreateWalkIn201JSONResponse(ownerBookingJSON(created)), nil
+		return CreateWalkIn201JSONResponse(s.ownerBookingJSON(created)), nil
 	}
 	p, ok := problemFor(err)
 	switch {
@@ -193,7 +229,7 @@ func (s *server) RescheduleBooking(ctx context.Context, req RescheduleBookingReq
 	moved, err := s.bookings.Reschedule(ctx, pgUUID(req.Id), pgUUID(req.Body.CourtId),
 		req.Body.Start, req.Body.End)
 	if err == nil {
-		return RescheduleBooking200JSONResponse(ownerBookingJSON(moved)), nil
+		return RescheduleBooking200JSONResponse(s.ownerBookingJSON(moved)), nil
 	}
 	p, ok := problemFor(err)
 	switch {
@@ -211,7 +247,7 @@ func (s *server) RescheduleBooking(ctx context.Context, req RescheduleBookingReq
 func (s *server) ChangeBookingStatus(ctx context.Context, req ChangeBookingStatusRequestObject) (ChangeBookingStatusResponseObject, error) {
 	changed, err := s.bookings.ChangeStatus(ctx, pgUUID(req.Id), store.BookingStatus(req.Body.Status))
 	if err == nil {
-		return ChangeBookingStatus200JSONResponse(ownerBookingJSON(changed)), nil
+		return ChangeBookingStatus200JSONResponse(s.ownerBookingJSON(changed)), nil
 	}
 	p, ok := problemFor(err)
 	switch {
@@ -232,7 +268,7 @@ func courtJSON(c booking.Court) Court {
 	return Court{Id: uuid.UUID(c.ID.Bytes), Name: c.Name, Sport: Sport(c.Sport)}
 }
 
-func bookingJSON(v booking.View) Booking {
+func (s *server) bookingJSON(v booking.View) Booking {
 	b := Booking{
 		Reference:  v.Reference,
 		CourtName:  v.CourtName,
@@ -247,11 +283,15 @@ func bookingJSON(v booking.View) Booking {
 		expires := v.HoldExpiresAt.Time.UTC().Truncate(time.Second)
 		b.HoldExpiresAt = &expires
 	}
+	if v.Status == store.BookingStatusHeld {
+		url := s.paymentPageURL + v.Reference
+		b.PaymentUrl = &url
+	}
 	return b
 }
 
-func ownerBookingJSON(v booking.View) OwnerBooking {
-	b := bookingJSON(v)
+func (s *server) ownerBookingJSON(v booking.View) OwnerBooking {
+	b := s.bookingJSON(v)
 	return OwnerBooking{
 		Id:            uuid.UUID(v.ID.Bytes),
 		CourtId:       uuid.UUID(v.CourtID.Bytes),
@@ -266,5 +306,6 @@ func ownerBookingJSON(v booking.View) OwnerBooking {
 		PriceIdr:      b.PriceIdr,
 		DepositIdr:    b.DepositIdr,
 		HoldExpiresAt: b.HoldExpiresAt,
+		PaymentUrl:    b.PaymentUrl,
 	}
 }

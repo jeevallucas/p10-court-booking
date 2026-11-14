@@ -191,3 +191,25 @@ revisit it.
 - Consequences: reseeding truncates bookings, payment notifications, and outbox messages; the
   venue, courts, prices, and owner account are kept.
 - Revisit if: the demo needs to keep visitor bookings across nights.
+
+## 2026-11-14 Poll the booking status every 3 seconds while it is held
+
+- Context: after paying, the player lands on the status page before or just after the payment
+  notification arrives, and should see the confirmation without reloading.
+- Options: (a) server-sent events or a WebSocket pushed by the API; (b) poll
+  `GET /v1/bookings/{code}` every 3 seconds, only while the status is `held`.
+- Decision: (b). A hold lasts at most 10 minutes, so one page polls at most 200 times, and
+  polling stops as soon as the booking is confirmed, expired or cancelled. It needs no
+  long-lived connections through the Vercel proxy or on the Render free instance.
+- Revisit if: many players wait on held bookings at once, or the owner board needs live updates.
+
+## 2026-11-14 Test web components against a fake fetch, not a mock server library
+
+- Context: the booking sheet and status page need tests for what the player sees when the API
+  says the slot is taken, the code is unknown, or the server cannot be reached.
+- Options: (a) Mock Service Worker; (b) a 30-line fake installed as `fetch` before the client
+  module loads, with each test saying how the API answers.
+- Decision: (b). The tests assert the rendered text, not the calls, and one more dependency
+  would buy only request matching the tests do not need. The full path through the real API is
+  covered by the end-to-end tests in milestone 6.
+- Revisit if: tests start needing request matching or many endpoints per test.

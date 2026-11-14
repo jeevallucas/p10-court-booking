@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { api } from "@/api/client";
+import { SlowServerNote } from "@/components/SlowServerNote";
 import { problemMessage } from "@/lib/problems";
 
 import styles from "./LoginForm.module.css";
@@ -73,6 +74,7 @@ export function LoginForm() {
           </p>
         )}
 
+        {logIn.isPending && <SlowServerNote />}
         <button type="submit" className={styles.primary} disabled={logIn.isPending}>
           {logIn.isPending ? "Masuk…" : "Masuk"}
         </button>

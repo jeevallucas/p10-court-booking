@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { api, type Booking } from "@/api/client";
+import { SlowServerNote } from "@/components/SlowServerNote";
 import { longDate, rupiah, timeLabel } from "@/lib/format";
 import { problemMessage } from "@/lib/problems";
 
@@ -36,7 +37,12 @@ export function BookingStatus({ reference }: { reference: string }) {
       <Link href="/" className={styles.venue}>
         Arena Kotabaru
       </Link>
-      {booking.isPending && <p aria-live="polite">Memuat booking {reference}…</p>}
+      {booking.isPending && (
+        <>
+          <p aria-live="polite">Memuat booking {reference}…</p>
+          <SlowServerNote />
+        </>
+      )}
       {booking.isError && (
         <div role="alert" className={styles.panel}>
           <p>Status booking gagal dimuat. {booking.error.message}</p>

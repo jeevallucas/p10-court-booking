@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import type { Court, OwnerBooking, OwnerDay } from "@/api/client";
+import { SlowServerNote } from "@/components/SlowServerNote";
 import {
   canMove,
   moveTo,
@@ -353,7 +354,12 @@ export function OwnerBoard() {
 
       <div className={styles.layout} data-panel-open={panelOpen}>
         <section aria-label="Jadwal per lapangan" className={styles.boardArea}>
-          {board.isPending && <BoardSkeleton />}
+          {board.isPending && (
+            <>
+              <SlowServerNote />
+              <BoardSkeleton />
+            </>
+          )}
           {board.isError && !sessionEnded && (
             <div className={styles.failure} role="alert">
               <p>Jadwal gagal dimuat. {board.error.message}</p>

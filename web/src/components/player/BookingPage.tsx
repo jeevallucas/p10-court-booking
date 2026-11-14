@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { api, type Sport } from "@/api/client";
+import { SlowServerNote } from "@/components/SlowServerNote";
 import { dayParts, longDate, rupiah, timeLabel, upcomingDays } from "@/lib/format";
 import { problemMessage } from "@/lib/problems";
 import { hourRows, type FreeCourt } from "@/lib/slots";
@@ -85,7 +86,12 @@ export function BookingPage() {
           {sportLabels[sport]}, {dayTitle}
         </h2>
 
-        {availability.isPending && <SlotSkeleton />}
+        {availability.isPending && (
+          <>
+            <SlowServerNote />
+            <SlotSkeleton />
+          </>
+        )}
 
         {availability.isError && (
           <div className={styles.notice} role="alert">

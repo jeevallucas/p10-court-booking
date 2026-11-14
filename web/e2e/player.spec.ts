@@ -1,6 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-import { availability, firstListedFreeSlot, holdAsAnotherPlayer, venueDay } from "./venue";
+import {
+  availability,
+  firstListedFreeSlot,
+  holdAsAnotherPlayer,
+  testPhone,
+  venueDay,
+} from "./venue";
 
 async function openTomorrow(page: import("@playwright/test").Page) {
   await page.goto("/");
@@ -22,7 +28,7 @@ test("a player holds a court, pays the deposit and sees the booking confirmed", 
 
   const sheet = page.getByRole("dialog");
   await sheet.getByLabel("Nama pemesan").fill("Sari Wulandari");
-  await sheet.getByLabel(/Nomor WhatsApp/).fill("0800 0000 4321");
+  await sheet.getByLabel(/Nomor WhatsApp/).fill(testPhone());
   await sheet.getByRole("button", { name: /^Bayar DP/ }).click();
 
   await expect(page.getByRole("heading", { name: "Simulasi pembayaran DP" })).toBeVisible();
@@ -46,7 +52,7 @@ test("a player who picks an hour someone else just held is told so", async ({ pa
     .click();
   const sheet = page.getByRole("dialog");
   await sheet.getByLabel("Nama pemesan").fill("Agus Setiawan");
-  await sheet.getByLabel(/Nomor WhatsApp/).fill("080000004322");
+  await sheet.getByLabel(/Nomor WhatsApp/).fill(testPhone());
   await sheet.getByRole("button", { name: /^Bayar DP/ }).click();
 
   await expect(sheet.getByRole("alert")).toContainText("baru saja dipesan orang lain");

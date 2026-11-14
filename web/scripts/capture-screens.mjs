@@ -44,6 +44,11 @@ async function shot(page, label, { axe = false } = {}) {
   }
 }
 
+// A fresh number in the unassigned +62 800 range: one phone may hold only two slots at a time.
+function testPhone() {
+  return `0800${String(Math.floor(Math.random() * 1e8)).padStart(8, "0")}`;
+}
+
 function venueDay(offsetDays) {
   return new Date(Date.now() + offsetDays * 24 * 3600_000).toLocaleDateString("en-CA", {
     timeZone: "Asia/Jakarta",
@@ -60,9 +65,9 @@ async function tomorrowSchedule(page) {
 }
 
 await mkdir(out, { recursive: true });
-const hold = await placeHold(venueDay(1), "Dewi Lestari", "081298765432");
+const hold = await placeHold(venueDay(1), "Dewi Lestari", testPhone());
 // A hold today puts a "Menunggu DP" block on the owner's board; late at night there may be none.
-await placeHold(venueDay(0), "Bayu Pratama", "081311112222").catch((error) =>
+await placeHold(venueDay(0), "Bayu Pratama", testPhone()).catch((error) =>
   console.warn(`No hold today, so the board shows no held booking: ${error.message}`),
 );
 

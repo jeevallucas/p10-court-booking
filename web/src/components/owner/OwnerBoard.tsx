@@ -404,6 +404,8 @@ export function OwnerBoard() {
                     <div
                       key={court.id}
                       className={styles.column}
+                      role="group"
+                      aria-label={court.name}
                       data-court-id={court.id}
                       data-sport-start={index > 0 && courts[index - 1].sport !== court.sport}
                       onClick={(event) => addWalkInAt(event, court)}

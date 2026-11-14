@@ -104,7 +104,7 @@ function Summary({ booking }: { booking: Booking }) {
       {confirmed && (
         <p>
           Sisa {rupiah(booking.priceIdr - booking.depositIdr)} dibayar di kasir. Tunjukkan kode
-          booking saat datang. Konfirmasi juga dikirim ke WhatsApp kamu.
+          booking saat datang.
         </p>
       )}
       {(booking.status === "expired" || booking.status === "cancelled") && (

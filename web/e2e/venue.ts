@@ -8,6 +8,14 @@ import type { Availability, OwnerDay } from "../src/api/client";
 /** Where owner.setup.ts saves the demo owner's session for the owner tests. */
 export const ownerSessionFile = "e2e/.auth/owner.json";
 
+/**
+ * A fresh number in the unassigned +62 800 range for each booking: the API lets one phone
+ * hold two slots at a time, and repeated runs must not use that up.
+ */
+export function testPhone(): string {
+  return `0800${String(Math.floor(Math.random() * 1e8)).padStart(8, "0")}`;
+}
+
 export function venueDay(offsetDays: number): string {
   return new Date(Date.now() + offsetDays * 24 * 3600_000).toLocaleDateString("en-CA", {
     timeZone: "Asia/Jakarta",
@@ -71,7 +79,7 @@ export async function holdAsAnotherPlayer(
       start,
       hours: 1,
       customerName: "Pemain lain",
-      customerPhone: "080000009999",
+      customerPhone: testPhone(),
     },
   });
   if (response.status() !== 201) {

@@ -157,7 +157,8 @@ export function BookingDialog({ chosen, availability, onClose, onSlotTaken }: Pr
             aria-describedby={`${formId}-phone-help ${formId}-phone-error`}
           />
           <span id={`${formId}-phone-help`} className={styles.help}>
-            Konfirmasi booking dikirim ke nomor ini.
+            Ini demo: tidak ada pesan WhatsApp yang dikirim, dan pengunjung lain bisa melihat data
+            demo sampai direset malam ini. Pakai nomor contoh, bukan nomor asli.
           </span>
           <span id={`${formId}-phone-error`} className={styles.error}>
             {touched && phoneError}

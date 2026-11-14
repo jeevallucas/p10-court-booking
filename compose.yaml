@@ -45,6 +45,8 @@ services:
       PUBLIC_WEB_URL: http://localhost:3000
       SMTP_ADDR: mailpit:1025
       COOKIE_SECURE: "false"
+      # The web container's proxy forwards each player's address; trust that one hop.
+      TRUSTED_PROXY_HOPS: "1"
     ports:
       - "8080:8080"
     depends_on:

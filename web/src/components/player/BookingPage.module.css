@@ -1,0 +1,210 @@
+.page {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.header {
+  margin: var(--space-2) 0 var(--space-4);
+}
+
+.header h1 {
+  font-size: var(--text-page);
+  font-weight: 700;
+}
+
+.header p {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-muted);
+}
+
+.days {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
+  scrollbar-width: thin;
+}
+
+.day {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 4.25rem;
+  min-height: 4.5rem;
+  padding: var(--space-2);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: var(--text-small);
+  cursor: pointer;
+}
+
+.day strong {
+  font-size: var(--text-section);
+}
+
+.day[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.sports {
+  display: inline-flex;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  margin-bottom: var(--space-6);
+}
+
+.sports button {
+  min-height: 44px;
+  min-width: 7.5rem;
+  padding: 0 var(--space-4);
+  background: var(--paper);
+  border: 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.sports button + button {
+  border-left: 1px solid var(--ink);
+}
+
+.sports button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.sectionTitle {
+  font-size: var(--text-section);
+  font-weight: 600;
+  margin-bottom: var(--space-3);
+}
+
+.hours {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.hour {
+  display: grid;
+  grid-template-columns: 6.75rem 1fr;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.hourLabel {
+  font-size: var(--text-time);
+  padding-top: var(--space-1);
+}
+
+.courts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.court {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 7.25rem;
+  min-height: 3.5rem;
+  padding: var(--space-2) var(--space-3);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  text-align: left;
+  cursor: pointer;
+}
+
+.court:hover {
+  border-color: var(--ink);
+}
+
+.price {
+  color: var(--ink-muted);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.full {
+  color: var(--ink-muted);
+  padding-top: var(--space-3);
+}
+
+.notice {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.notice p {
+  margin: 0 0 var(--space-3);
+  max-width: 60ch;
+}
+
+.notice button {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Hidden for the first 300 ms so a fast load never flashes placeholder rows. */
+.skeleton {
+  min-height: 4.5rem;
+  opacity: 0;
+  animation: reveal 0s linear 300ms forwards;
+}
+
+@keyframes reveal {
+  to {
+    opacity: 1;
+  }
+}
+
+.skeletonTime,
+.skeletonCourt {
+  display: inline-block;
+  height: 3.5rem;
+  background: #e6e9e4;
+  border-radius: var(--radius);
+}
+
+.skeletonTime {
+  width: 5.5rem;
+}
+
+.skeletonCourt {
+  width: 7.25rem;
+  margin-right: var(--space-2);
+}
+
+@media (max-width: 420px) {
+  .hour {
+    grid-template-columns: 5.75rem 1fr;
+  }
+
+  .hourLabel {
+    font-size: 1.625rem;
+  }
+
+  .court {
+    min-width: 6.5rem;
+  }
+}

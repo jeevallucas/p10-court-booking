@@ -51,6 +51,10 @@ func PlaceHold(ctx context.Context, pool *pgxpool.Pool, req HoldRequest) (store.
 	var held store.Booking
 	err = pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
 		queries := store.New(tx)
+		// Writers for one court queue here instead of deadlocking on the constraint (LockCourt).
+		if err := queries.LockCourt(ctx, req.CourtID); err != nil {
+			return fmt.Errorf("lock court: %w", err)
+		}
 		// A hold whose time ran out still counts for the constraint until it is marked expired.
 		if _, err := queries.ExpireOverlappingHolds(ctx, store.ExpireOverlappingHoldsParams{
 			CourtID: req.CourtID,

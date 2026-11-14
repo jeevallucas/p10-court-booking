@@ -260,3 +260,35 @@ func mustWalkIn(t *testing.T, service *booking.Service, court pgtype.UUID, start
 	}
 	return view
 }
+
+func TestOwnerWritesQueueBehindAnotherWriterOnTheSameCourt(t *testing.T) {
+	ctx := context.Background()
+	t.Run("walk-in", func(t *testing.T) {
+		service, venue := newService(t, local(10, 0))
+		dbtest.RequireQueuesBehindCourtLock(t, service.Pool, venue.Badminton[0], func() error {
+			_, err := service.CreateWalkIn(ctx, booking.WalkIn{
+				CourtID: venue.Badminton[0], Start: local(19, 0), End: local(20, 0), CustomerName: "Joko Susilo",
+			})
+			return err
+		})
+	})
+	t.Run("reschedule onto the court", func(t *testing.T) {
+		service, venue := newService(t, local(10, 0))
+		walkIn := mustWalkIn(t, service, venue.Badminton[0], local(19, 0), local(20, 0))
+		dbtest.RequireQueuesBehindCourtLock(t, service.Pool, venue.Badminton[1], func() error {
+			_, err := service.Reschedule(ctx, walkIn.ID, venue.Badminton[1], local(19, 0), local(20, 0))
+			return err
+		})
+	})
+	t.Run("deposit paid at the desk", func(t *testing.T) {
+		service, venue := newService(t, local(10, 0))
+		held, err := service.HoldForPlayer(ctx, playerHold(venue.Badminton[2], local(19, 0), 1))
+		if err != nil {
+			t.Fatal(err)
+		}
+		dbtest.RequireQueuesBehindCourtLock(t, service.Pool, venue.Badminton[2], func() error {
+			_, err := service.ChangeStatus(ctx, held.ID, store.BookingStatusConfirmed)
+			return err
+		})
+	})
+}

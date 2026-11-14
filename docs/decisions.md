@@ -253,3 +253,21 @@ revisit it.
   booking has usually paid only the deposit and owes the rest at the desk.
 - Decision: the board and panel say "Terkonfirmasi" and the panel shows what is still due at
   the desk, so the owner does not wave through a player who still owes money.
+
+## 2026-11-14 Lock the court row before writing a booking
+
+- Context: the load test (docs/load-test.md) found that two transactions inserting overlapping
+  bookings at the same moment can deadlock on the exclusion constraint: each finds the other's
+  uncommitted row and waits for it. PostgreSQL breaks the cycle after one second, one request
+  fails with a 500, and requests behind it queue; one run saw 57 deadlocks and waits up to 56 s.
+- Options: (a) retry transactions that fail with 40P01; (b) take the court's row lock
+  (`for no key update`) at the start of every transaction that puts a booking on a court.
+- Decision: (b). Retrying still costs a one-second stall per deadlock; the lock stops the cycle
+  forming, and writers for different courts never wait for each other. The exclusion constraint
+  stays the guarantee against double booking (2026-11-14 entry above): the lock only orders the
+  writers. Every writer takes the court before any booking row, so the lock order is the same
+  everywhere, and the expiry sweep skips rows that are locked instead of waiting on them.
+- Consequences: holds for one court are applied one at a time; 200 simultaneous attempts on one
+  court now finish with p95 360 to 517 ms on a laptop and no errors. A new booking write must
+  call LockCourt first; tests check that each existing write waits for another writer's lock.
+

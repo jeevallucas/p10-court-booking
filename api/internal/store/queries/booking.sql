@@ -1,3 +1,16 @@
+-- name: LockCourt :exec
+-- Every write that puts a booking on a court takes this lock first, so writers for one court
+-- queue. The exclusion constraint alone keeps bookings apart, but two transactions inserting
+-- overlapping rows at the same moment each wait for the other's uncommitted row and deadlock;
+-- the load test hit this (docs/load-test.md). Taking the court before any booking row also
+-- gives every writer the same lock order.
+select id from court where id = sqlc.arg(id) for no key update;
+
+-- name: LockCourtOfBooking :exec
+select id from court
+where id = (select court_id from booking where booking.id = sqlc.arg(booking_id))
+for no key update;
+
 -- name: ExpireOverlappingHolds :execrows
 -- Marks holds whose time has run out on this court and period as expired, so the exclusion
 -- constraint stops counting them before a new booking is inserted.
@@ -30,10 +43,15 @@ insert into booking (
 returning *;
 
 -- name: ExpireHolds :execrows
--- The periodic sweep: frees every hold whose ten minutes are over.
+-- The periodic sweep: frees every hold whose ten minutes are over. It skips holds another
+-- transaction has locked rather than wait inside a booking write; the next sweep gets them.
 update booking
 set status = 'expired', hold_expires_at = null, updated_at = now()
-where status = 'held' and hold_expires_at <= now();
+where id in (
+    select id from booking
+    where status = 'held' and hold_expires_at <= now()
+    for update skip locked
+);
 
 -- name: GetBookingByReference :one
 select sqlc.embed(booking), court.name as court_name, court.sport

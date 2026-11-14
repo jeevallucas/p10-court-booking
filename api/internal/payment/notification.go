@@ -88,6 +88,10 @@ func (p *Processor) Apply(ctx context.Context, n Notification, payload []byte) (
 	var outcome Outcome
 	err = pgx.BeginFunc(ctx, p.Pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
+		// The court before the booking: the lock order every booking write follows.
+		if err := q.LockCourtOfReference(ctx, n.OrderID); err != nil {
+			return fmt.Errorf("lock court: %w", err)
+		}
 		row, err := q.LockBookingByReference(ctx, n.OrderID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrUnknownOrder

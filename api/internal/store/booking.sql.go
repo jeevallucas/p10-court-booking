@@ -49,10 +49,15 @@ func (q *Queries) ChangeStatus(ctx context.Context, arg ChangeStatusParams) (Boo
 const expireHolds = `-- name: ExpireHolds :execrows
 update booking
 set status = 'expired', hold_expires_at = null, updated_at = now()
-where status = 'held' and hold_expires_at <= now()
+where id in (
+    select id from booking
+    where status = 'held' and hold_expires_at <= now()
+    for update skip locked
+)
 `
 
-// The periodic sweep: frees every hold whose ten minutes are over.
+// The periodic sweep: frees every hold whose ten minutes are over. It skips holds another
+// transaction has locked rather than wait inside a booking write; the next sweep gets them.
 func (q *Queries) ExpireHolds(ctx context.Context) (int64, error) {
 	result, err := q.db.Exec(ctx, expireHolds)
 	if err != nil {
@@ -366,6 +371,31 @@ func (q *Queries) ListOccupyingBookings(ctx context.Context, arg ListOccupyingBo
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockCourt = `-- name: LockCourt :exec
+select id from court where id = $1 for no key update
+`
+
+// Every write that puts a booking on a court takes this lock first, so writers for one court
+// queue. The exclusion constraint alone keeps bookings apart, but two transactions inserting
+// overlapping rows at the same moment each wait for the other's uncommitted row and deadlock;
+// the load test hit this (docs/load-test.md). Taking the court before any booking row also
+// gives every writer the same lock order.
+func (q *Queries) LockCourt(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, lockCourt, id)
+	return err
+}
+
+const lockCourtOfBooking = `-- name: LockCourtOfBooking :exec
+select id from court
+where id = (select court_id from booking where booking.id = $1)
+for no key update
+`
+
+func (q *Queries) LockCourtOfBooking(ctx context.Context, bookingID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, lockCourtOfBooking, bookingID)
+	return err
 }
 
 const reschedule = `-- name: Reschedule :one

@@ -328,6 +328,9 @@ func (s *Service) CreateWalkIn(ctx context.Context, req WalkIn) (View, error) {
 	var created store.Booking
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		txq := store.New(tx)
+		if err := txq.LockCourt(ctx, court.ID); err != nil {
+			return fmt.Errorf("lock court: %w", err)
+		}
 		period := Period(req.Start, req.End)
 		if _, err := txq.ExpireOverlappingHolds(ctx, store.ExpireOverlappingHoldsParams{
 			CourtID: court.ID, Period: period,
@@ -382,8 +385,17 @@ func (s *Service) Reschedule(ctx context.Context, id, courtID pgtype.UUID, start
 	if !end.After(s.Now()) {
 		return View{}, ErrInThePast
 	}
-	moved, err := q.Reschedule(ctx, store.RescheduleParams{
-		ID: id, CourtID: court.ID, Period: Period(start, end),
+	var moved store.Booking
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		txq := store.New(tx)
+		if err := txq.LockCourt(ctx, court.ID); err != nil {
+			return fmt.Errorf("lock court: %w", err)
+		}
+		var rescheduleErr error
+		moved, rescheduleErr = txq.Reschedule(ctx, store.RescheduleParams{
+			ID: id, CourtID: court.ID, Period: Period(start, end),
+		})
+		return rescheduleErr
 	})
 	if isOverlapViolation(err) {
 		return View{}, ErrSlotTaken
@@ -429,7 +441,19 @@ func (s *Service) ChangeStatus(ctx context.Context, id pgtype.UUID, to store.Boo
 	for i, status := range from {
 		fromText[i] = string(status)
 	}
-	changed, err := q.ChangeStatus(ctx, store.ChangeStatusParams{ID: id, ToStatus: to, AllowedFrom: fromText})
+	// Confirming a hold at the desk puts it back under the constraint, so lock the court first.
+	var changed store.Booking
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		txq := store.New(tx)
+		if err := txq.LockCourtOfBooking(ctx, id); err != nil {
+			return fmt.Errorf("lock court: %w", err)
+		}
+		var changeErr error
+		changed, changeErr = txq.ChangeStatus(ctx, store.ChangeStatusParams{
+			ID: id, ToStatus: to, AllowedFrom: fromText,
+		})
+		return changeErr
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return View{}, fmt.Errorf("%w: a %s booking cannot become %s", ErrInvalidTransition,
 			current.Booking.Status, to)

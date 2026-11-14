@@ -233,3 +233,12 @@ func statusOf(t *testing.T, pool *pgxpool.Pool, id pgtype.UUID) string {
 	}
 	return status
 }
+
+func TestAHoldQueuesBehindAnotherWriterOnTheSameCourt(t *testing.T) {
+	pool := dbtest.New(t)
+	court := dbtest.Court(t, pool, "badminton")
+	dbtest.RequireQueuesBehindCourtLock(t, pool, court, func() error {
+		_, err := booking.PlaceHold(context.Background(), pool, holdFor(court, evening, 1))
+		return err
+	})
+}

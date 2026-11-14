@@ -112,6 +112,19 @@ func (q *Queries) LockBookingByReference(ctx context.Context, reference string) 
 	return i, err
 }
 
+const lockCourtOfReference = `-- name: LockCourtOfReference :exec
+select id from court
+where id = (select court_id from booking where reference = $1)
+for no key update
+`
+
+// A paid hold may take its slot back, so the notification locks the court first, like every
+// other booking write (LockCourt in booking.sql).
+func (q *Queries) LockCourtOfReference(ctx context.Context, reference string) error {
+	_, err := q.db.Exec(ctx, lockCourtOfReference, reference)
+	return err
+}
+
 const releaseHold = `-- name: ReleaseHold :one
 update booking
 set status = 'cancelled', hold_expires_at = null, updated_at = now()

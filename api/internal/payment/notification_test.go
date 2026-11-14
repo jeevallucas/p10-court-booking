@@ -257,3 +257,14 @@ func TestATamperedOrUnknownNotificationIsRefused(t *testing.T) {
 		t.Fatalf("booking is %s after refused notifications, want held", got)
 	}
 }
+
+func TestAPaymentQueuesBehindAnotherWriterOnTheSameCourt(t *testing.T) {
+	f := newFixture(t)
+	held := f.hold(t, 0, 19)
+	notification := signed(held.Reference, "trx-queue", "settlement", held.DepositIdr)
+	dbtest.RequireQueuesBehindCourtLock(t, f.pool, f.venue.Badminton[0], func() error {
+		payload, _ := json.Marshal(notification)
+		_, err := f.processor.Apply(context.Background(), notification, payload)
+		return err
+	})
+}

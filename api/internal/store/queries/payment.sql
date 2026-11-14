@@ -1,3 +1,10 @@
+-- name: LockCourtOfReference :exec
+-- A paid hold may take its slot back, so the notification locks the court first, like every
+-- other booking write (LockCourt in booking.sql).
+select id from court
+where id = (select court_id from booking where reference = sqlc.arg(reference))
+for no key update;
+
 -- name: LockBookingByReference :one
 -- Locks the booking so concurrent notifications for it are applied one at a time.
 select sqlc.embed(booking), court.name as court_name, court.sport

@@ -83,3 +83,19 @@ revisit it.
   official Docker image, version pinned.
 - Decision: (c). The generated code is committed, and CI runs `sqlc diff` with the same image to
   catch generated code that is out of date.
+
+## 2026-11-14 Use a local fake payment provider with Midtrans's notification contract
+
+- Context: the plan used the Midtrans sandbox (Snap) for deposits. The sandbox account could not
+  be used: registration reported the email and phone as taken, and after a password reset the
+  merchant login refused the account's role, which only Midtrans support can change.
+- Options: (a) wait for Midtrans support; (b) a local fake provider that follows Midtrans's
+  documented notification contract: the same JSON fields, statuses, and the signature
+  `SHA512(order_id + status_code + gross_amount + server_key)`; (c) another gateway's sandbox.
+- Decision: (b), as the plan's fallback. The parts the project exists to show are the
+  notification handler's signature check, idempotency under replay, and out-of-order handling,
+  and they behave the same against the fake. The payment code sits behind one interface, so a
+  real Midtrans client can replace the fake when an account is available.
+- Consequences: the demo's "pay deposit" step opens the fake provider's page instead of the Snap
+  pop-up, and the README says so. No real or sandbox money flows anywhere.
+- Revisit if: a working Midtrans sandbox account becomes available.

@@ -15,6 +15,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: lycheeverse/lychee-action@v2
         with:
-          # localhost links in the run instructions only work on a reviewer's machine.
-          args: --no-progress --exclude localhost README.md docs
+          # localhost links only work on a reviewer's machine, and LinkedIn answers every
+          # automated request with status 999, so a working profile link would fail the check.
+          args: --no-progress --exclude localhost --exclude linkedin.com README.md docs
           fail: true
